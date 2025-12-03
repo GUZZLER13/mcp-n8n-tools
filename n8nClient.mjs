@@ -106,23 +106,23 @@ export async function createSimpleWorkflow(input) {
   }
 
   const body = {
-    name,
-    active,
-    nodes: [
-      {
-        parameters: {},
-        name: "When clicking ‘Execute workflow’",
-        type: "n8n-nodes-base.manualTrigger",
-        typeVersion: 1,
-        position: [0, 0],
-      },
-    ],
-    connections: {},
-    settings: {
-      executionOrder: "v1",
+  name,
+  nodes: [
+    {
+      parameters: {},
+      name: "When clicking ‘Execute workflow’",
+      type: "n8n-nodes-base.manualTrigger",
+      typeVersion: 1,
+      position: [0, 0],
     },
-    tags: [],
-  };
+  ],
+  connections: {},
+  settings: {
+    executionOrder: "v1",
+  },
+  tags: [],
+};
+
 
   return callN8N("/api/v1/workflows", {
     method: "POST",
