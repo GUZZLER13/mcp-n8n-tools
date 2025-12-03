@@ -15,8 +15,6 @@ Serveur MCP (Model Context Protocol) permettant d'exposer une instance n8n self-
 - [Utilisation avec ChatGPT](#utilisation-avec-chatgpt)
 - [Structure du projet](#structure-du-projet)
 - [Outils MCP exposés](#outils-mcp-exposés)
-- [Git](#git)
-- [Roadmap / idées](#roadmap--idées)
 
 ---
 
