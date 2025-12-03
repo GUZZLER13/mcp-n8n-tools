@@ -1,6 +1,11 @@
 
 Serveur MCP (Model Context Protocol) permettant d'exposer une instance n8n self-hosted à des clients compatibles MCP, notamment ChatGPT via un serveur MCP HTTP.
 
+## Description
+
+**mcp-n8n-tools** est un serveur **MCP HTTP** permettant à des clients compatibles Model Context Protocol
+(comme ChatGPT) d’interagir directement avec une instance **n8n self-hosted** via l’API officielle.
+
 ---
 
 ## Sommaire
