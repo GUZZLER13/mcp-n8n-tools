@@ -1,0 +1,20 @@
+# Dépendances
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Env / secrets
+.env
+.env.local
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Éditeurs / système
+.DS_Store
+.idea/
+.vscode/

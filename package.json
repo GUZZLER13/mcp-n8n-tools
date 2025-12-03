@@ -1,0 +1,20 @@
+{
+  "name": "mcp-n8n-tools",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "server-http.mjs",
+  "scripts": {
+    "start": "node server-http.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "zod": "^4.1.13"
+  }
+}
