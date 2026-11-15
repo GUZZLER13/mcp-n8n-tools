@@ -64,7 +64,7 @@ linux = exact(linux, 'npm install --omit=dev --silent',
 const initLine = linux.split('\n').find(x => x.includes('node agent/agent.js init --gateway'));
 if (!initLine) throw new Error('Cannot find Linux agent init');
 linux = exact(linux, initLine,
-  initLine.replace(/--gateway "[^"]+"/, '--gateway "ws://127.0.0.1:8765/device"'));
+  initLine.replace(/--gateway "[^"]+"/, '--gateway "ws://127.0.0.1:8766/device"'));
 linux = exact(linux, 'mkdir -p ~/.config/systemd/user',
   'BACKEND_ROOT="$HOME/.local/share/vortex-commander/backend"\n' +
   'npm install --prefix "$BACKEND_ROOT" --ignore-scripts --no-audit --no-fund --save-exact @wonderwhy-er/desktop-commander@0.3.3\n' +
@@ -77,6 +77,9 @@ linux = exact(linux, 'for u in gateway agent; do',
 linux = exact(linux, 'sed -e "s#@BIND_HOST@#$BIND_HOST#g"',
   'sed -e "s#@NODE_BIN@#$NODE_BIN#g" -e "s#@BIND_HOST@#$BIND_HOST#g"');
 put('deploy/install-linux.sh', linux);
+// Isolate the VORTEX gateway on 127.0.0.1:8766, never claim port 8765.
+const gatewayUnit = 'deploy/remote-mcp-gateway.service.in';
+put(gatewayUnit, exact(get(gatewayUnit), '--port 8765', '--port 8766'));
 for (const name of ['agent', 'gateway']) {
   const rel = 'deploy/remote-mcp-' + name + '.service.in';
   put(rel, exact(get(rel), '/usr/bin/node', '@NODE_BIN@'));
