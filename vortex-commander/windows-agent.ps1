@@ -1,7 +1,7 @@
 # VORTEX Commander non-admin Windows agent.
 # Run after inspecting this file, using an ordinary PowerShell session.
 param(
-    [ValidateSet('Status','Prepare','Pair','Run')]
+    [ValidateSet('Status','Prepare','Pair','Run','Autostart','RemoveAutostart')]
     [string]$Action = 'Status',
     [string]$DeviceId = $env:COMPUTERNAME.ToLowerInvariant()
 )
@@ -64,5 +64,23 @@ switch ($Action) {
         Push-Location $Dest
         try { & $Node 'agent/agent.js' }
         finally { Pop-Location }
+    }
+
+    Autostart {
+        if (-not (Test-Path $Config)) { throw 'Pair and test Run first' }
+        $Startup = [Environment]::GetFolderPath('Startup')
+        $Target = Join-Path $Startup 'VORTEX Commander.cmd'
+        $AgentScript = Join-Path $Dest 'agent\agent.js'
+        if (-not (Test-Path $AgentScript)) { throw 'Agent missing' }
+        $Content = '@echo off' + [Environment]::NewLine +
+            'start "" /min "' + $Node + '" "' + $AgentScript + '"' +
+            [Environment]::NewLine
+        [IO.File]::WriteAllText($Target, $Content, [Text.UTF8Encoding]::new($false))
+        Write-Host 'User-level startup configured. Run RemoveAutostart to undo.'
+    }
+    RemoveAutostart {
+        $Target = Join-Path ([Environment]::GetFolderPath('Startup')) 'VORTEX Commander.cmd'
+        if (Test-Path $Target) { Remove-Item -LiteralPath $Target }
+        Write-Host 'User-level startup shortcut removed.'
     }
 }

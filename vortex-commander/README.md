@@ -94,3 +94,25 @@ Ne pas appairer avant OAuth validé côté VPS.
 - Les tests CI ne garantissent pas la compatibilité réelle des cinq appareils.
 - Le plugin MCP de test prouve la communication simple avec ChatGPT, pas encore
   les autorisations d'écriture et de terminal de notre futur connecteur.
+
+## Supervision des agents Linux : NAS et seedbox
+
+Apres installation, appairage et validation du mode Run, utiliser
+agent-supervisor.sh. Sur les systemes avec systemd utilisateur :
+
+    bash agent-supervisor.sh start systemd
+
+Sur une seedbox ou systemd utilisateur n'est pas autorise, **si tmux est present** :
+
+    bash agent-supervisor.sh start tmux
+
+Le mode tmux ne garantit pas un redemarrage de l'agent apres reboot de la
+seedbox : verifier les options autorisees par l'hebergeur. Chaque mode dispose
+de status et stop, uniquement pour l'agent VORTEX.
+
+## Retour arriere
+
+Sur le VPS, stop-local.sh desactive les nouvelles unites systemd utilisateur
+afin qu'elles ne redemarrent pas automatiquement apres un reboot.
+Il ne restaure PAS a lui seul l'ancienne route Caddy, qui doit etre sauvegardee
+avant une bascule. Ni RACINES, ATLAS, VORTEX ni VPS Bridge ne sont touches.

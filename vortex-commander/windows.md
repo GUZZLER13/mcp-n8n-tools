@@ -44,5 +44,15 @@ Les jetons sont conservés localement, pas dans GitHub ni dans ChatGPT.
 - L'agent se reconnecte après veille/réouverture de la session.
 - L'agent tourne avec les droits ordinaires du compte Windows.
 
-Démarrage automatique : volontairement différé jusqu'aux tests sur les vrais
-ordinateurs. Ne pas désactiver les protections Windows.
+Démarrage automatique FACULTATIF : seulement APRES avoir valide Run sur le vrai PC.
+Le script cree un raccourci utilisateur dans le dossier de demarrage, sans admin :
+
+    .\windows-agent.ps1 -Action Autostart
+
+Pour le retirer :
+
+    .\windows-agent.ps1 -Action RemoveAutostart
+
+Le lancement a lieu lors de l'ouverture de session Windows. Il n'est pas
+equivalent a un service systeme disponible avant connexion.
+Ne pas desactiver les protections Windows.
