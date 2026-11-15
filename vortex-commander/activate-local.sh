@@ -10,8 +10,8 @@ command -v node >/dev/null 2>&1 || { echo "Node absent"; exit 4; }
 node -e 'let [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)' || {
   echo "Node >=22.13 necessaire"; exit 4
 }
-if command -v ss >/dev/null 2>&1 && ss -H -ltn '( sport = :8765 )' | grep -q .; then
-  echo "Port 8765 deja occupe"; exit 5
+if command -v ss >/dev/null 2>&1 && ss -H -ltn '( sport = :8766 )' | grep -q .; then
+  echo "Port 8766 deja occupe"; exit 5
 fi
 cd "$HOME/remote-mcp"
 PUBLIC_URL=https://mcp.guzzler-bot.cloud BIND_HOST=127.0.0.1 \
