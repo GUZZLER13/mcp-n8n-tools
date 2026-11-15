@@ -10,7 +10,9 @@ import path from 'node:path';
 import net from 'node:net';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vortex-e2e-'));
+// Desktop Commander limits file access to the OS user's home by default.
+const home = fs.mkdtempSync(path.join(os.homedir(), '.vortex-e2e-'));
+fs.chmodSync(home, 0o700);
 const dbPath = path.join(home, 'gateway.sqlite');
 const entry = path.join(
   os.homedir(), '.local/share/vortex-commander/backend',

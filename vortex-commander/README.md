@@ -116,3 +116,17 @@ Sur le VPS, stop-local.sh desactive les nouvelles unites systemd utilisateur
 afin qu'elles ne redemarrent pas automatiquement apres un reboot.
 Il ne restaure PAS a lui seul l'ancienne route Caddy, qui doit etre sauvegardee
 avant une bascule. Ni RACINES, ATLAS, VORTEX ni VPS Bridge ne sont touches.
+
+## Deux couches de restrictions sur les fichiers
+
+Le test de bout en bout a confirmé que **Desktop Commander local applique
+lui-même un ensemble de répertoires autorisés** (par défaut le dossier
+utilisateur). Le filtrage de chemins de SelfHostDesktopMCP ne peut qu'ajouter
+des restrictions ; il ne donne pas accès à un répertoire interdit par le
+moteur Desktop Commander.
+
+Pour le NAS, la seedbox et le VPS, vérifier les répertoires réellement
+nécessaires (ex. un point de montage de stockage) et configurer une
+**autorisation explicite** dans les paramètres locaux de Desktop Commander,
+sans supprimer les protections des clés SSH et des jetons. Ne pas modifier
+l'accès général à tout le système par défaut.
