@@ -60,6 +60,8 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           bash -n deploy/install-linux.sh
+          grep -q -- '--port 8766' deploy/remote-mcp-gateway.service.in
+          grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
           ! grep -q '@latest' agent/agent.js
 
       - name: Install pinned local Desktop Commander for end-to-end gateway test
