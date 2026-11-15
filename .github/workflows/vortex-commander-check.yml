@@ -85,6 +85,13 @@ jobs:
           const counts = report.metadata && report.metadata.vulnerabilities;
           if (!counts) { console.log('::warning::npm audit returned no vulnerability summary'); process.exit(0); }
           console.log('VORTEX pinned backend npm audit: ' + JSON.stringify(counts));
+          const findings = Object.entries(report.vulnerabilities || {});
+          for (const [name, item] of findings) {
+            if (!['high', 'critical', 'moderate'].includes(item.severity)) continue;
+            const via = (item.via || []).map(v => typeof v === 'string' ? v : ({title:v.title,range:v.range,url:v.url})).slice(0,5);
+            const finding = {name,severity:item.severity,isDirect:item.isDirect,range:item.range,fixAvailable:item.fixAvailable,via};
+            console.log('VORTEX npm advisory detail: ' + JSON.stringify(finding));
+          }
           if ((counts.critical || 0) + (counts.high || 0) > 0)
             console.log('::warning::High/critical production advisories exist; review before VPS deployment.');
           NODE
