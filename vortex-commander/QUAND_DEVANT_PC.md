@@ -63,6 +63,26 @@ Inspecter la sortie des tests et les changements prévus avant de lancer
 l'activation. Ce dossier ne doit pas être fusionné avec les fichiers de RACINES,
 ATLAS, VORTEX Arcade ou VPS Bridge.
 
+**Le 16/11/2026, la configuration Desktop Commander déjà installée a été
+contrôlée sur le VPS.** Ses `allowedDirectories` sont vides (pas de
+restriction spécifique), ses `blockedCommands` comprennent `sudo`, `su`,
+`reboot`, `mkfs`, etc. Le compte `stef` a accès au volume Hetzner et
+appartient aussi au groupe Docker, qui peut avoir des privilèges équivalents
+à root. Les commandes Docker ne sont donc pas considérées comme isolées.
+
+**Très important :** `prepare.sh` avait déjà été exécuté avant le correctif
+qui protège la configuration partagée de l'ancien Desktop Commander.
+Après `git pull` du kit, synchroniser **uniquement** le petit helper du
+nouvel agent, avant l'activation :
+
+    cp "$HOME/vortex-commander-kit/vortex-commander/configure-backend.mjs" \
+       "$HOME/remote-mcp/agent/configure-backend.mjs"
+
+Cela ne change pas le Desktop Commander déjà installé. Le script d'activation
+refuse désormais de démarrer si les deux fichiers ne sont pas identiques.
+La configuration existante `~/.claude-server-commander/config.json` ne doit
+pas être écrasée par le nouveau projet.
+
 Puis, seulement après vérification du port et des services :
 
     VORTEX_CONFIRM_ACTIVATION=OUI bash activate-local.sh
