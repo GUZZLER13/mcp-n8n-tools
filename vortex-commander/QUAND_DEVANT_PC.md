@@ -16,6 +16,22 @@ Cette fiche est préparée pour le jour où l'accès SSH au VPS sera disponible.
 Le diagnostic affiche seulement les versions et prérequis. Ne jamais publier de clés,
 mots de passe ou jetons d'appairage.
 
+### Diagnostic simplifié depuis Windows
+
+Le même dossier inclut `pc-assistant.ps1`, qui peut vérifier les prérequis
+localement ou sur un appareil joignable en SSH, **sans installation distante** :
+
+    powershell -NoProfile -File .\pc-assistant.ps1 -Action Local
+    powershell -NoProfile -File .\pc-assistant.ps1 -Action AuditVps -SshTarget MON_ALIAS_SSH
+    powershell -NoProfile -File .\pc-assistant.ps1 -Action AuditSeedbox -SshTarget MON_ALIAS_SEEDBOX
+    powershell -NoProfile -File .\pc-assistant.ps1 -Action AuditNas -SshTarget MON_ALIAS_NAS
+
+Remplacer les alias par les noms SSH **déjà configurés** sur ce PC ; ne pas
+inventer d'identifiants et ne jamais les publier dans un dépôt.
+Pour la seedbox, une connexion SSH existante suffit à diagnostiquer le compte,
+sans perturber Transmission. Pour le PC d'Enzo, lancer `-Action Local`
+directement dans sa session Windows lorsqu'elle sera disponible.
+
 ## Etape 2 : accès SSH au VPS
 
 Depuis un PowerShell sur le PC, vérifier **seulement** la disponibilité de

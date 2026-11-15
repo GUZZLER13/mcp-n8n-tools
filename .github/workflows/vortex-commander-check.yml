@@ -111,6 +111,14 @@ jobs:
           if ($preflightErrors.Count -ne 0) { throw "Windows preflight parser errors: $preflightErrors" }
           & powershell.exe -NoProfile -File 'vortex-commander/preflight-windows.ps1'
           if ($LASTEXITCODE -ne 0) { throw 'Windows preflight failed' }
+          $tokens = $null
+          $assistantErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/pc-assistant.ps1').Path,
+            [ref]$tokens, [ref]$assistantErrors) | Out-Null
+          if ($assistantErrors.Count -ne 0) { throw "PC assistant parser errors: $assistantErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/pc-assistant.ps1' -Action Local
+          if ($LASTEXITCODE -ne 0) { throw 'PC assistant local diagnostic failed' }
       - name: Install source dependencies without lifecycle scripts
         working-directory: upstream
         run: npm ci --ignore-scripts --no-audit --no-fund
