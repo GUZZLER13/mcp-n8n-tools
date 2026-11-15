@@ -171,3 +171,17 @@ via OAuth, le renouvellement et l'invalidation de l'ancien jeton.
 **Cela n'accorde pas à ChatGPT Plus de droits MCP que son abonnement
 n'autoriserait pas** : il faudra vérifier la disponibilité des outils
 d'écriture dans le compte réel avant toute migration.
+
+
+## Déploiement parallèle — VPS Hetzner (16 novembre 2026)
+
+Contrôles SSH du compte `stef` : Node.js `22.23.3`, Caddy et systemctl
+présents. Le port `127.0.0.1:8765` est déjà occupé par un processus Python
+(PID 3113406 lors du diagnostic ; répertoire de travail `/app`). Le port
+`8766` est libre. Le statut `systemctl --user is-system-running` était
+`degraded` : identifier les unités en échec avant activation.
+
+Notre passerelle utilise désormais `127.0.0.1:8766` dans l'unité systemd,
+la connexion de l'agent VPS et le contrôle local. Ne pas arrêter le
+processus Python ni modifier Caddy avant une validation locale et un
+plan de retour arrière.
