@@ -3,7 +3,7 @@
 set -euo pipefail
 node --input-type=module <<'NODE'
 import assert from 'node:assert/strict';
-const base = 'http://127.0.0.1:8765';
+const base = 'http://127.0.0.1:8766';
 const publicUrl = 'https://mcp.guzzler-bot.cloud';
 async function verify() {
   const health = await fetch(base + '/health', { signal: AbortSignal.timeout(6000) });
