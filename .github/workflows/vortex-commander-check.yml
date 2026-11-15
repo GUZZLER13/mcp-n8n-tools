@@ -59,6 +59,9 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
+          cp ../vortex-commander/test-vps-user-policy.mjs test/vortex-vps-user-policy.test.js
+          cp ../vortex-commander/policy-vps-admin-user.json test/vortex-policy-vps-admin-user.json
+          node --test test/vortex-vps-user-policy.test.js
           bash -n deploy/install-linux.sh
           grep -q -- '--port 8766' deploy/remote-mcp-gateway.service.in
           grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
