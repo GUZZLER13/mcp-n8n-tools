@@ -3,7 +3,7 @@
 mcp.guzzler-bot.cloud {
     @vortex path /health /mcp /device /.well-known/* /authorize /token /register /pair/*
     handle @vortex {
-        reverse_proxy 127.0.0.1:8765 {
+        reverse_proxy 127.0.0.1:8766 {
             flush_interval -1
         }
     }
