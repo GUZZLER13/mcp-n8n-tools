@@ -13,6 +13,13 @@ node -e 'let [a,b]=process.versions.node.split(".").map(Number);process.exit(a>2
 if command -v ss >/dev/null 2>&1 && ss -H -ltn '( sport = :8766 )' | grep -q .; then
   echo "Port 8766 deja occupe"; exit 5
 fi
+# Fail closed if services from an earlier or unrelated deployment exist.
+# Never overwrite an existing systemd unit, even if the gateway port is free.
+for name in remote-mcp-agent remote-mcp-gateway; do
+  if [[ -e "$HOME/.config/systemd/user/$name.service" ]]; then
+    echo "Service utilisateur deja present: $name.service. Aucune modification."; exit 6
+  fi
+done
 cd "$HOME/remote-mcp"
 PUBLIC_URL=https://mcp.guzzler-bot.cloud BIND_HOST=127.0.0.1 \
   DEVICE_ID=vps-hetzner bash deploy/install-linux.sh
