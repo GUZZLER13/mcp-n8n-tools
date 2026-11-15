@@ -89,16 +89,19 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     procs.push(processChild);
     return processChild;
   }
+  let sessionId;
   async function call(method, params) {
     const response = await fetch(base + '/mcp', {
       method: 'POST', headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: 'Bearer ' + clientToken
+        authorization: 'Bearer ' + clientToken,
+        ...(sessionId ? { 'mcp-session-id': sessionId } : {})
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: Math.floor(Math.random() * 1000000) + 1, method, params })
     });
     assert.equal(response.status, 200, 'MCP HTTP request failed');
+    sessionId = response.headers.get('mcp-session-id') || sessionId;
     return (await response.json()).result;
   }
   try {
@@ -107,6 +110,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     // No authentication means access denied before agent tool execution.
     const unauthorized = await fetch(base + '/mcp', { method: 'POST', body: '{}' });
     assert.equal(unauthorized.status, 401);
+    await call('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'vortex-ci', version: '0.1' } });
     start(process.execPath, ['agent/agent.js', '--config', agentConfig, '--policy', policyPath]);
     await until(async () => {
       const resp = await call('tools/call', { name: 'devices_list' });
@@ -120,12 +124,12 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     const read = await call('tools/call', {
       name: 'read_file', arguments: { path: inputPath, device_id: 'e2e-machine' }
     });
-    assert.equal(read.isError, false, 'read_file failed: ' + JSON.stringify(read).slice(0, 400));
+    assert.ok(!read.isError, 'read_file failed: ' + JSON.stringify(read).slice(0, 400));
     assert.match(JSON.stringify(read.content), /vortex-read-marker-2026/);
     const write = await call('tools/call', {
       name: 'write_file', arguments: { path: outputPath, content: 'vortex-write-marker-2026\n', device_id: 'e2e-machine' }
     });
-    assert.equal(write.isError, false, 'write_file failed: ' + JSON.stringify(write).slice(0, 400));
+    assert.ok(!write.isError, 'write_file failed: ' + JSON.stringify(write).slice(0, 400));
     assert.equal(fs.readFileSync(outputPath, 'utf8'), 'vortex-write-marker-2026\n');
     const forbidden = await call('tools/call', {
       name: 'read_file', arguments: { path: path.join(os.homedir(), '.ssh/id_ed25519'), device_id: 'e2e-machine' }
