@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           for file in vortex-commander/*.sh; do bash -n "$file"; done
           for file in vortex-commander/*.mjs; do node --check "$file"; done
+          node --test vortex-commander/test-preserve-existing-dc.mjs
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck -S error vortex-commander/*.sh
           fi
@@ -131,6 +132,8 @@ jobs:
         run: |
           node vortex-commander/patch-upstream.mjs upstream
           if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          node --test vortex-commander/test-preserve-existing-dc.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Existing Desktop Commander config preservation regression' }
           $tokens = $null
           $parseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
