@@ -1,7 +1,8 @@
-name: VORTEX Commander — upstream compatibility checks
+name: VORTEX Commander - Linux and Windows hardening
+
 on:
   push:
-    branches: [vortex-commander-bootstrap]
+    branches: [vortex-commander-hardening]
     paths:
       - 'vortex-commander/**'
       - '.github/workflows/vortex-commander-check.yml'
@@ -10,62 +11,109 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: vortex-commander-hardening
+  cancel-in-progress: true
+
 jobs:
-  script-safety:
-    name: Shell syntax and lint
+  script-syntax:
+    name: Shell and JavaScript syntax
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check bootstrap scripts syntax
+      - name: Validate installer syntax
         shell: bash
         run: |
           set -euo pipefail
-          for f in vortex-commander/*.sh; do bash -n "$f"; done
-      - name: Check bootstrap scripts with ShellCheck
-        shell: bash
-        run: |
-          set -euo pipefail
+          for file in vortex-commander/*.sh; do bash -n "$file"; done
+          for file in vortex-commander/*.mjs; do node --check "$file"; done
           if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck -S warning vortex-commander/*.sh
-          else
-            echo "ShellCheck not installed; bash -n passed."
+            shellcheck -S error vortex-commander/*.sh
           fi
 
-  upstream-tests:
-    name: Upstream on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  linux:
+    name: Pinned upstream - Linux regression tests
+    runs-on: ubuntu-latest
     timeout-minutes: 12
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
     steps:
-      - name: Fetch pinned self-hosted MCP upstream
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
         with:
           repository: andyching168/SelfHostDesktopMCP
           ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
           path: upstream
           persist-credentials: false
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install locked dependencies without postinstall scripts
+      - name: Apply safety and compatibility fixes
+        run: node vortex-commander/patch-upstream.mjs upstream
+      - name: Run locked dependencies and upstream suite
         working-directory: upstream
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Check upstream gateway and agent syntax
-        working-directory: upstream
-        run: |
-          node --check gateway/server.js
-          node --check agent/agent.js
-      - name: Run upstream unit/integration tests
-        working-directory: upstream
-        run: npm test
-      - name: Check whether Desktop Commander backend can spawn npx on this OS
         shell: bash
         run: |
-          node -e 'const {spawnSync}=require("node:child_process"); const p=spawnSync("npx",["--version"],{encoding:"utf8",timeout:15000}); if(p.error||p.status!==0){console.error("Direct npx spawn failed on "+process.platform+": "+(p.error?.message||p.stderr||p.status));process.exit(1)};console.log("Direct npx spawn OK:",p.stdout.trim())'
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          bash -n deploy/install-linux.sh
+          ! grep -q '@latest' agent/agent.js
+
+  windows:
+    name: Windows policy and real Desktop Commander MCP startup
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply overlay and parse PowerShell installer
+        shell: pwsh
+        run: |
+          node vortex-commander/patch-upstream.mjs upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-agent.ps1').Path,
+            [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "PowerShell parse errors: $parseErrors" }
+      - name: Install source dependencies without lifecycle scripts
+        working-directory: upstream
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify Windows denied paths policy
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-windows-policy.mjs' 'upstream/test/vortex-policy.test.js'
+          Push-Location upstream
+          try {
+            node --test test/policy.test.js test/vortex-policy.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows policy regression failed' }
+          } finally { Pop-Location }
+      - name: Install pinned local Desktop Commander without postinstall
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:LOCALAPPDATA 'VortexCommander\backend'
+          npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
+          if ($LASTEXITCODE -ne 0) { throw 'Backend install failed' }
+      - name: Start actual MCP stdio backend on Windows
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-backend-smoke.mjs' 'upstream/test/vortex-backend.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-backend.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander backend startup failed' }
+          } finally { Pop-Location }
