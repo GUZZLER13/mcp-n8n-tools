@@ -34,6 +34,8 @@ case "$ACTION" in
     node "$KIT/patch-upstream.mjs" "$stage/source"
     ( cd "$stage/source"; npm ci --ignore-scripts --no-audit --no-fund; npm test )
     npm install --prefix "$BACKEND" --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
+    npm pkg set --prefix "$BACKEND" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1
+    npm install --prefix "$BACKEND" --ignore-scripts --no-audit --no-fund
     mv "$stage/source" "$DEST"
     echo "Agent prepare pour $DEVICE_ID. Aucun service demarre."
     ;;

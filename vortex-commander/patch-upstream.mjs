@@ -56,6 +56,8 @@ linux = exact(linux, initLine,
 linux = exact(linux, 'mkdir -p ~/.config/systemd/user',
   'BACKEND_ROOT="$HOME/.local/share/vortex-commander/backend"\n' +
   'npm install --prefix "$BACKEND_ROOT" --ignore-scripts --no-audit --no-fund --save-exact @wonderwhy-er/desktop-commander@0.3.3\n' +
+  'npm pkg set --prefix "$BACKEND_ROOT" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1\n' +
+  'npm install --prefix "$BACKEND_ROOT" --ignore-scripts --no-audit --no-fund\n' +
   'node agent/configure-backend.mjs\n' +
   'mkdir -p ~/.config/systemd/user');
 linux = exact(linux, 'for u in gateway agent; do',

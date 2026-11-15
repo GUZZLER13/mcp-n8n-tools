@@ -137,3 +137,15 @@ Voir [QUAND_DEVANT_PC.md](QUAND_DEVANT_PC.md), le diagnostic Windows
 [preflight-windows.ps1](preflight-windows.ps1) et le
 [plan des cinq appareils](device-plan.json). Aucun secret d'appairage
 n'est stocke dans ces fichiers.
+
+## Corrections ciblées des dépendances
+
+Le moteur Desktop Commander 0.3.3 utilise certaines versions de dépendances
+signalées par npm audit. Nos scripts appliquent des overrides à la racine de
+notre installation : `node-forge=1.4.3` et `exceljs > uuid=11.1.1`.
+Les tests CI doivent prouver leur compatibilité avant tout déploiement.
+
+L'alerte `zod` reste à examiner : son correctif impose un changement majeur
+(3 vers 4) et ne doit pas être forcé sans revue. Les alertes restantes ne
+sont pas masquées : nous conservons l'audit npm visible dans GitHub Actions.
+**Le déploiement public reste interdit tant que la sécurité n'est pas validée.**

@@ -44,6 +44,10 @@ switch ($Action) {
         } finally { Pop-Location }
         & npm.cmd install --prefix $Backend --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
         if ($LASTEXITCODE -ne 0) { throw 'Pinned backend installation failed' }
+        & npm.cmd pkg set --prefix $Backend 'overrides.node-forge=1.4.3' 'overrides.exceljs.uuid=11.1.1'
+        if ($LASTEXITCODE -ne 0) { throw 'Security dependency override failed' }
+        & npm.cmd install --prefix $Backend --ignore-scripts --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw 'Pinned backend dependency update failed' }
         Write-Host 'Agent prepared. No connection or autostart enabled.'
     }
     Pair {
