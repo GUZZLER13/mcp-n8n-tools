@@ -1,4 +1,4 @@
-name: VORTEX Commander bootstrap — script checks
+name: VORTEX Commander — upstream compatibility checks
 on:
   push:
     branches: [vortex-commander-bootstrap]
@@ -6,25 +6,66 @@ on:
       - 'vortex-commander/**'
       - '.github/workflows/vortex-commander-check.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
-  validate:
+  script-safety:
+    name: Shell syntax and lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Parse shell scripts
+      - name: Check bootstrap scripts syntax
+        shell: bash
         run: |
           set -euo pipefail
           for f in vortex-commander/*.sh; do bash -n "$f"; done
-      - name: Lint shell scripts
+      - name: Check bootstrap scripts with ShellCheck
+        shell: bash
         run: |
           set -euo pipefail
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck -S warning vortex-commander/*.sh
           else
-            echo "shellcheck non preinstalle, syntaxe Bash controlee ci-dessus"
+            echo "ShellCheck not installed; bash -n passed."
           fi
+
+  upstream-tests:
+    name: Upstream on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Fetch pinned self-hosted MCP upstream
+        uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies without postinstall scripts
+        working-directory: upstream
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check upstream gateway and agent syntax
+        working-directory: upstream
+        run: |
+          node --check gateway/server.js
+          node --check agent/agent.js
+      - name: Run upstream unit/integration tests
+        working-directory: upstream
+        run: npm test
+      - name: Check whether Desktop Commander backend can spawn npx on this OS
+        shell: bash
+        run: |
+          node -e 'const {spawnSync}=require("node:child_process"); const p=spawnSync("npx",["--version"],{encoding:"utf8",timeout:15000}); if(p.error||p.status!==0){console.error("Direct npx spawn failed on "+process.platform+": "+(p.error?.message||p.stderr||p.status));process.exit(1)};console.log("Direct npx spawn OK:",p.stdout.trim())'
