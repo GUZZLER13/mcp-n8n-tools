@@ -19,6 +19,27 @@ bash vc-prepare.sh
 
 Préparer ne démarre ni service ni port public et n'efface aucun ancien projet. Le script épingle le commit upstream `0d67f39aef13ce8253e9a2b7a376e9799a465d22`, installe les dépendances avec scripts npm désactivés, et lance les tests dans un dossier temporaire avant de déplacer les sources vers `~/remote-mcp`.
 
+
+## Activer seulement apres preparation et audit
+
+```bash
+curl -fsSLo vc-activate.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/activate-local.sh
+less vc-activate.sh
+VORTEX_CONFIRM_ACTIVATION=OUI bash vc-activate.sh
+curl -fsSLo vc-verify.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/verify.sh
+bash vc-verify.sh
+```
+
+Le script de mise en route cree des services utilisateur et des secrets prives, mais n'installe pas le routage Caddy public.
+Avant la bascule de l'ancien domaine, sauvegarder l'ancien Caddyfile et lire `Caddyfile.example`. Pour revenir en arriere sur les services nouvellement installes :
+
+```bash
+curl -fsSLo vc-stop.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/stop-local.sh
+bash vc-stop.sh
+```
+
+L'acces via ChatGPT Plus aux outils d'ecriture reste a valider par un test en conditions reelles. La compatibilite Windows et l'agent sur seedbox restent aussi a verifier.
+
 ## Mise en route locale (après audit)
 
 ```bash
