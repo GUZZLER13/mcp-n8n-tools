@@ -129,6 +129,16 @@ jobs:
           $prefix = Join-Path $env:LOCALAPPDATA 'VortexCommander\backend'
           npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
           if ($LASTEXITCODE -ne 0) { throw 'Backend install failed' }
+      - name: Test real Windows HTTP gateway and agent file operations
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-e2e.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows full gateway-to-agent test failed' }
+          } finally { Pop-Location }
+
       - name: Start actual MCP stdio backend on Windows
         shell: pwsh
         run: |

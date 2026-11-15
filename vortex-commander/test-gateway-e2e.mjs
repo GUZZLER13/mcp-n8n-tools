@@ -14,10 +14,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const home = fs.mkdtempSync(path.join(os.homedir(), '.vortex-e2e-'));
 fs.chmodSync(home, 0o700);
 const dbPath = path.join(home, 'gateway.sqlite');
-const entry = path.join(
-  os.homedir(), '.local/share/vortex-commander/backend',
-  'node_modules', '@wonderwhy-er', 'desktop-commander', 'dist', 'index.js'
-);
+const rootBackend = process.platform === 'win32'
+  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'VortexCommander', 'backend')
+  : path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'backend');
+const entry = path.join(rootBackend, 'node_modules', '@wonderwhy-er', 'desktop-commander', 'dist', 'index.js');
 const procs = [];
 
 function freePort() {
@@ -139,7 +139,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     assert.ok(!listingDir.isError, 'list_directory failed: ' + JSON.stringify(listingDir).slice(0, 350));
     assert.match(JSON.stringify(listingDir.content), /read-test\.txt/);
     const processCall = await call('tools/call', {
-      name: 'start_process', arguments: { command: 'pwd', timeout_ms: 10000, device_id: 'e2e-machine' }
+      name: 'start_process', arguments: { command: process.platform === 'win32' ? 'whoami' : 'pwd', timeout_ms: 10000, device_id: 'e2e-machine' }
     });
     assert.ok(!processCall.isError, 'start_process failed: ' + JSON.stringify(processCall).slice(0, 350));
     const forbidden = await call('tools/call', {
@@ -153,6 +153,9 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     await sleep(600);
     if (oldConfig) fs.writeFileSync(dcConfig, oldConfig);
     else fs.rmSync(dcConfig, { force: true });
-    fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // Windows SQLite holds a DB handle briefly after child exit (EBUSY).
+    // CI runners are ephemeral; leaving a temp test dir is preferable to a false
+    // failure in this integration test. Linux cleans up normally.
+    if (process.platform !== 'win32') fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
