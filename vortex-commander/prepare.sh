@@ -10,8 +10,8 @@ done
 node -e 'let [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)' \
   || { echo "Node >=22.13 requis"; exit 1; }
 [[ ! -e "$DEST" ]] || { echo "$DEST existe deja: ne rien ecraser"; exit 2; }
-if command -v ss >/dev/null 2>&1 && ss -H -ltn '( sport = :8765 )' | grep -q .; then
-  echo "Port 8765 utilise : aucune installation"; exit 3
+if command -v ss >/dev/null 2>&1 && ss -H -ltn '( sport = :8766 )' | grep -q .; then
+  echo "Port 8766 utilise : aucune installation"; exit 3
 fi
 umask 077
 TMP="$(mktemp -d "$HOME/.vc-stage.XXXXXXXX")"
