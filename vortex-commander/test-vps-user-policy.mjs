@@ -1,0 +1,20 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadPolicy, check } from '../agent/policy.js';
+import fs from 'node:fs';
+import path from 'node:path';
+const file = path.resolve('test/vortex-policy-vps-admin-user.json');
+test('optional operator policy grants user commands and mounted data access', () => {
+  assert.ok(fs.existsSync(file));
+  const p = loadPolicy(file);
+  assert.equal(check(p, 'start_process', { command: 'systemctl --user status' }), null);
+  assert.equal(check(p, 'start_process', { command: 'git status' }), null);
+  assert.equal(check(p, 'list_directory', { path: '/mnt/HC_Volume_106963451' }), null);
+  assert.equal(check(p, 'read_file', { path: '/home/stef/projects/readme.md' }), null);
+  assert.equal(check(p, 'write_file', { path: '/home/stef/projects/readme.md' }), null);
+  assert.match(check(p, 'start_process', { command: 'sudo systemctl stop caddy' }), /blocked program/);
+  assert.match(check(p, 'read_file', { path: '~/.ssh/id_ed25519' }), /blocked location/);
+  assert.match(check(p, 'write_file', { path: '~/remote-mcp/secrets/owner-token' }), /blocked location/);
+  assert.match(check(p, 'write_file', { path: '~/remote-mcp/gateway/server.js' }), /read-only/);
+  assert.match(check(p, 'set_config_value'), /disabled by policy/);
+});
