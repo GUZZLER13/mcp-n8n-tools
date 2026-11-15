@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import crypto from 'node:crypto';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Desktop Commander limits file access to the OS user's home by default.
@@ -107,7 +108,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     return (await response.json()).result;
   }
   try {
-    start(process.execPath, ['gateway/server.js', '--host', '127.0.0.1', '--port', String(port), '--db', dbPath]);
+    start(process.execPath, ['gateway/server.js', '--host', '127.0.0.1', '--port', String(port), '--db', dbPath, '--public-url', 'https://mcp.example.com']);
     await until(async () => (await fetch(base + '/health')).ok, 15000);
     // No authentication means access denied before agent tool execution.
     const unauthorized = await fetch(base + '/mcp', { method: 'POST', body: '{}' });
@@ -143,6 +144,107 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
       name: 'start_process', arguments: { command: process.platform === 'win32' ? 'whoami' : 'pwd', timeout_ms: 10000, device_id: 'e2e-machine' }
     });
     assert.ok(!processCall.isError, 'start_process failed: ' + JSON.stringify(processCall).slice(0, 350));
+
+    // Reproduce the ChatGPT custom MCP OAuth flow: discovery -> dynamic
+    // registration -> owner consent -> PKCE exchange -> authenticated MCP
+    // session -> real device write -> refresh rotation. Test secrets are
+    // temporary, ephemeral and never logged or committed.
+    const issuer = 'https://mcp.example.com';
+    const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
+    const metadata = await (await fetch(base + '/.well-known/oauth-protected-resource')).json();
+    assert.equal(metadata.resource, issuer + '/mcp');
+    assert.ok(metadata.authorization_servers.includes(issuer));
+    const discovery = await (await fetch(base + '/.well-known/oauth-authorization-server')).json();
+    assert.equal(discovery.issuer, issuer);
+    assert.equal(discovery.token_endpoint, issuer + '/token');
+    const registration = await fetch(base + '/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'ChatGPT VORTEX integration test', redirect_uris: [redirect] })
+    });
+    assert.equal(registration.status, 201, 'OAuth dynamic registration must succeed');
+    const oauthClient = await registration.json();
+    assert.ok(oauthClient.client_id, 'OAuth client registration id missing');
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const authParams = new URLSearchParams({
+      response_type: 'code', client_id: oauthClient.client_id,
+      redirect_uri: redirect, code_challenge: challenge, code_challenge_method: 'S256',
+      state: 'vortex-e2e-state', resource: issuer + '/mcp'
+    });
+    const ownerToken = extract(admin('client-create', 'vortex-owner', '--admin'), 'client_token');
+    const consent = await fetch(base + '/authorize', {
+      method: 'POST', redirect: 'manual',
+      body: new URLSearchParams({ ...Object.fromEntries(authParams), owner_token: ownerToken, action: 'approve' })
+    });
+    assert.equal(consent.status, 302, 'Desktop OAuth consent did not redirect');
+    const callback = new URL(consent.headers.get('location'));
+    assert.equal(callback.origin + callback.pathname, redirect);
+    assert.equal(callback.searchParams.get('state'), 'vortex-e2e-state');
+    assert.equal(callback.searchParams.get('iss'), issuer);
+    const grant = await fetch(base + '/token', {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', client_id: oauthClient.client_id,
+        code: callback.searchParams.get('code'), redirect_uri: redirect, code_verifier: verifier
+      })
+    });
+    assert.equal(grant.status, 200, 'OAuth code and PKCE exchange failed');
+    const oauthTokens = await grant.json();
+    assert.ok(oauthTokens.access_token && oauthTokens.refresh_token);
+    let oauthSession = null;
+    async function oauthRpc(method, params, accessToken = oauthTokens.access_token) {
+      const response = await fetch(base + '/mcp', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer ' + accessToken,
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...(oauthSession ? { 'mcp-session-id': oauthSession } : {})
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 54, method, params })
+      });
+      assert.equal(response.status, 200, 'OAuth-authenticated MCP HTTP request failed');
+      oauthSession = response.headers.get('mcp-session-id') || oauthSession;
+      const json = await response.json();
+      assert.ok(!json.error, 'OAuth MCP JSON-RPC error: ' + JSON.stringify(json.error));
+      return json.result;
+    }
+    await oauthRpc('initialize', {
+      protocolVersion: '2025-06-18', capabilities: {},
+      clientInfo: { name: 'ChatGPT-like test client', version: '1.0' }
+    });
+    const oauthTools = await oauthRpc('tools/list', {});
+    assert.ok(oauthTools.tools.some(tool => tool.name === 'write_file'));
+    const oauthOutput = path.join(home, 'oauth-write-test.txt');
+    const oauthWrite = await oauthRpc('tools/call', {
+      name: 'write_file',
+      arguments: { path: oauthOutput, content: 'vortex-oauth-write-marker\n', device_id: 'e2e-machine' }
+    });
+    assert.ok(!oauthWrite.isError, 'OAuth relay to write_file failed: ' + JSON.stringify(oauthWrite).slice(0, 400));
+    assert.equal(fs.readFileSync(oauthOutput, 'utf8'), 'vortex-oauth-write-marker\n');
+    const refreshed = await fetch(base + '/token', {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: oauthClient.client_id,
+        refresh_token: oauthTokens.refresh_token
+      })
+    });
+    assert.equal(refreshed.status, 200, 'OAuth refresh grant failed');
+    const rotated = await refreshed.json();
+    assert.notEqual(rotated.refresh_token, oauthTokens.refresh_token, 'Refresh token was not rotated');
+    const replay = await fetch(base + '/token', {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: oauthClient.client_id,
+        refresh_token: oauthTokens.refresh_token
+      })
+    });
+    assert.equal(replay.status, 400, 'Replayed refresh token should fail');
+    console.log('OAuth ChatGPT-like flow passed: discovery, PKCE, consent, real MCP file write and refresh rotation.');
+
     const forbidden = await call('tools/call', {
       name: 'read_file', arguments: { path: path.join(os.homedir(), '.ssh/id_ed25519'), device_id: 'e2e-machine' }
     });
