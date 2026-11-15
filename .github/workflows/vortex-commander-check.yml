@@ -62,6 +62,19 @@ jobs:
           bash -n deploy/install-linux.sh
           ! grep -q '@latest' agent/agent.js
 
+      - name: Install pinned local Desktop Commander for end-to-end gateway test
+        shell: bash
+        run: |
+          npm install --prefix "$HOME/.local/share/vortex-commander/backend" \
+            --ignore-scripts --no-audit --no-fund --save-exact \
+            '@wonderwhy-er/desktop-commander@0.3.3'
+      - name: Authenticated HTTP gateway to real agent read/write smoke
+        shell: bash
+        run: |
+          cp vortex-commander/test-gateway-e2e.mjs upstream/test/vortex-gateway-e2e.test.js
+          cd upstream
+          node --test test/vortex-gateway-e2e.test.js
+
   windows:
     name: Windows policy and real Desktop Commander MCP startup
     runs-on: windows-latest
