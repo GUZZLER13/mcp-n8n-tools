@@ -51,6 +51,10 @@ en cas de dossier existant, service inconnu ou port occupé.
 
 ## Etape 3 : mise en route VPS, sur validation des résultats
 
+Depuis le compte Linux **non-root** du VPS, vérifier au préalable les
+services utilisateur en échec avec `systemctl --user --failed` et ne pas
+supprimer de service existant.
+
 Depuis le compte Linux **non-root** du VPS :
 
     bash prepare.sh
@@ -70,7 +74,7 @@ Caddyfile actif, puis remplacer uniquement le routage de
 
 ### Tests de la passerelle (sans installer ChatGPT)
 
-Sur le VPS, utiliser bash verify.sh pour vérifier les endpoints locaux.
+Sur le VPS, utiliser bash verify.sh pour vérifier la nouvelle passerelle sur 127.0.0.1:8766. Le service Python existant conserve 127.0.0.1:8765.
 Après sauvegarde et validation du Caddyfile, basculer le domaine de façon
 contrôlée puis exécuter bash verify-public.sh.
 
