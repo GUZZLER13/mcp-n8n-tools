@@ -1,68 +1,96 @@
-# VORTEX Commander — préparation SelfHostDesktopMCP
+# VORTEX Commander — SelfHostDesktopMCP
 
-Branche de préparation **isolée**, sans changement dans `main`. Aucun déploiement sur le VPS n'a encore été effectué.
+## Projet
 
-## Objectif
+Remplacement auto-hébergé de Remote Desktop Commander : une passerelle HTTPS
+avec OAuth sur le VPS Hetzner et des agents Desktop Commander sur cinq appareils.
+Nous conservons les fonctions fichiers, terminal, processus, recherche et
+édition, avec comptes OS non privilégiés.
 
-Remplacer VPS Bridge par [SelfHostDesktopMCP](https://github.com/andyching168/SelfHostDesktopMCP) et les agents open source Desktop Commander (VPS, NAS, deux PC et seedbox si autorisée).
+Sources utilisées :
+- Passerelle : https://github.com/andyching168/SelfHostDesktopMCP
+- Commit fixe : 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+- Moteur : @wonderwhy-er/desktop-commander@0.3.3
+- Branche de travail : vortex-commander-hardening
 
-## Sur le VPS, sous un compte Linux non-root
+## État réel
 
-```bash
-curl -fsSLo vc-preflight.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/preflight.sh
-bash vc-preflight.sh
+Les scripts et tests sont en cours de validation GitHub. La passerelle et les
+agents NE SONT PAS encore installés par cette conversation sur les appareils.
+L'ancien VPS Bridge reste en place tant que la connexion OAuth et les outils
+d'écriture depuis ChatGPT n'ont pas été vérifiés.
 
-curl -fsSLo vc-prepare.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/prepare.sh
-less vc-prepare.sh
-bash vc-prepare.sh
-```
+Le quota de Remote Desktop Commander est atteint et le plugin n8n ne répond
+pas : aucun accès shell de remplacement au VPS n'est disponible ici.
 
-Préparer ne démarre ni service ni port public et n'efface aucun ancien projet. Le script épingle le commit upstream `0d67f39aef13ce8253e9a2b7a376e9799a465d22`, installe les dépendances avec scripts npm désactivés, et lance les tests dans un dossier temporaire avant de déplacer les sources vers `~/remote-mcp`.
+## Ordre de déploiement
 
+1. Télécharger ce dossier depuis la branche vortex-commander-hardening.
+2. Exécuter preflight.sh en lecture seule depuis le VPS non-root.
+3. Inspecter prepare.sh, puis préparer la copie du serveur sur le VPS.
+4. Exécuter activate-local.sh uniquement après validation de ses prérequis.
+5. Exécuter verify.sh. Le port 8765 reste sur 127.0.0.1.
+6. Vérifier l'ancien Caddyfile et sauvegarder la configuration avant toute
+   bascule du domaine mcp.guzzler-bot.cloud. Utiliser Caddyfile.example
+   seulement après adaptation aux routes déjà présentes et validation Caddy.
+7. Associer le nouveau serveur MCP dans ChatGPT Web avec OAuth, puis tester
+   l'accès en lecture et en écriture depuis ChatGPT classique.
+8. Appairer NAS, seedbox et PC, puis tester chaque machine.
+9. Désactiver l'ancien VPS Bridge uniquement après tests complets.
 
-## Activer seulement apres preparation et audit
+## VPS Hetzner, sous le compte normal
 
-```bash
-curl -fsSLo vc-activate.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/activate-local.sh
-less vc-activate.sh
-VORTEX_CONFIRM_ACTIVATION=OUI bash vc-activate.sh
-curl -fsSLo vc-verify.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/verify.sh
-bash vc-verify.sh
-```
+Depuis le dossier vortex-commander :
 
-Le script de mise en route cree des services utilisateur et des secrets prives, mais n'installe pas le routage Caddy public.
-Avant la bascule de l'ancien domaine, sauvegarder l'ancien Caddyfile et lire `Caddyfile.example`. Pour revenir en arriere sur les services nouvellement installes :
+    bash preflight.sh
+    bash prepare.sh
 
-```bash
-curl -fsSLo vc-stop.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools/vortex-commander-bootstrap/vortex-commander/stop-local.sh
-bash vc-stop.sh
-```
+La préparation clone et vérifie une version fixe, applique nos correctifs
+VORTEX et exécute des tests. Aucun serveur n'est démarré à cette étape.
 
-L'acces via ChatGPT Plus aux outils d'ecriture reste a valider par un test en conditions reelles. La compatibilite Windows reste a corriger. La seedbox avait deja un agent Remote Desktop Commander en ligne : l'agent direct est prioritaire ; sa compatibilite avec cette nouvelle passerelle reste a tester.
+Après revue des résultats (demande une confirmation explicite) :
 
-## Mise en route locale (après audit)
+    VORTEX_CONFIRM_ACTIVATION=OUI bash activate-local.sh
+    bash verify.sh
 
-```bash
-cd ~/remote-mcp
-PUBLIC_URL=https://mcp.guzzler-bot.cloud BIND_HOST=127.0.0.1 DEVICE_ID=vps-hetzner bash deploy/install-linux.sh
-curl -i http://127.0.0.1:8765/health
-```
+L'activation crée deux services utilisateur systemd sur la boucle locale.
+Ne PAS exécuter en root, ne PAS changer le firewall, ne PAS publier le port
+8765. L'owner token reste dans un fichier privé sur le VPS.
 
-**Attention** : lancer l'installation seulement après avoir contrôlé qu'elle ne heurte pas un service existant sur le port 8765 et que les unités systemd utilisateur sont utilisables. Le domaine public et Caddy ne doivent pas être modifiés avant validation. Le jeton owner se trouve sur le VPS et ne doit jamais être publié.
+## NAS et seedbox
 
-La connexion MCP ChatGPT via OAuth, les outils d'écriture et la compatibilité Windows sont encore **à vérifier**. Le projet ne doit pas être lancé en root, ni servir de shell non protégé. L'ancien VPS Bridge ne sera arrêté qu'après validation réelle.
+Récupérer le même dossier vortex-commander sur l'appareil.
+Utiliser linux-agent.sh en compte non-root et seulement après tests de la
+passerelle. La seedbox avait déjà un agent Remote Desktop Commander en ligne
+sur dsb39911.seedbox.io, mais le nouveau backend et ses droits sont à tester.
 
-Documentation détaillée également dans le kit ZIP produit dans la discussion.
+    bash linux-agent.sh status
+    bash linux-agent.sh prepare
+    # Après ouverture manuelle de l'appairage côté VPS :
+    bash linux-agent.sh pair nas
+    bash linux-agent.sh run
 
-## Seedbox deja equipee de Desktop Commander
+Sur la seedbox remplacer nas par seedbox-io.
+Ne pas installer de service persistant non autorisé par l'hébergeur.
+Voir seedbox.md.
 
-L'ancien agent Remote Desktop Commander sur `dsb39911.seedbox.io` etait
-**en ligne** lors de la verification de nos appareils. La migration vise donc
-un agent VORTEX Commander directement sur la seedbox, et non seulement un
-pont SSH/SFTP. Voir [seedbox.md](seedbox.md) et le diagnostic sans modification
-[seedbox-preflight.sh](seedbox-preflight.sh).
+## PC Windows
 
-Le test GitHub Linux de SelfHostDesktopMCP a reussi ; sur Windows, des echecs
-amont persistent (notamment verrouillage SQLite, tests de chemins et erreurs
-de lancement de commandes). **Ne pas installer sur les deux PC avant
-adaptation et validation explicites.**
+Sur chaque PC non administrateur, lire windows.md :
+
+    .\windows-agent.ps1 -Action Status
+    .\windows-agent.ps1 -Action Prepare
+
+Ne pas appairer avant OAuth validé côté VPS.
+
+## Sécurité et limites
+
+- Le serveur reste lié à localhost jusqu'à activation contrôlée de Caddy.
+- Aucun secret ni token ne doit apparaître dans GitHub, les logs ou le chat.
+- Les restrictions de commandes du projet ne sont PAS une sandbox.
+- Aucun accès root ou privilège Administrateur automatique.
+- Docker/Transmission/Plex restent limités aux permissions OS et à celles
+  accordées à chaque agent.
+- Les tests CI ne garantissent pas la compatibilité réelle des cinq appareils.
+- Le plugin MCP de test prouve la communication simple avec ChatGPT, pas encore
+  les autorisations d'écriture et de terminal de notre futur connecteur.
