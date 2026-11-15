@@ -139,7 +139,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     assert.ok(!listingDir.isError, 'list_directory failed: ' + JSON.stringify(listingDir).slice(0, 350));
     assert.match(JSON.stringify(listingDir.content), /read-test\.txt/);
     const processCall = await call('tools/call', {
-      name: 'start_process', arguments: { command: 'pwd', device_id: 'e2e-machine' }
+      name: 'start_process', arguments: { command: 'pwd', timeout_ms: 10000, device_id: 'e2e-machine' }
     });
     assert.ok(!processCall.isError, 'start_process failed: ' + JSON.stringify(processCall).slice(0, 350));
     const forbidden = await call('tools/call', {
