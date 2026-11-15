@@ -14,7 +14,7 @@ fi
 if command -v ss >/dev/null 2>&1; then
   if ss -H -ltn '( sport = :8765 )' | grep -q .; then echo "Port 8765: OCCUPE"; else echo "Port 8765: libre"; fi
 fi
-for d in "$HOME/remote-mcp" "$HOME/vps-bridge"; do
+for d in "$HOME/remote-mcp" "$HOME/vps-bridge" "/mnt/HC_Volume_106963451/vps-bridge"; do
   if [[ -e "$d" ]]; then echo "Existe: $d"; else echo "Absent: $d"; fi
 done
 echo "Aucun service ni fichier modifie."

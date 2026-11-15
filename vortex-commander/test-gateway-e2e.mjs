@@ -135,6 +135,27 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     });
     assert.ok(!write.isError, 'write_file failed: ' + JSON.stringify(write).slice(0, 400));
     assert.equal(fs.readFileSync(outputPath, 'utf8'), 'vortex-write-marker-2026\n');
+    const edited = await call('tools/call', {
+      name: 'edit_block',
+      arguments: {
+        file_path: outputPath,
+        old_string: 'vortex-write-marker-2026',
+        new_string: 'vortex-edited-marker-2026',
+        device_id: 'e2e-machine'
+      }
+    });
+    assert.ok(!edited.isError, 'edit_block failed: ' + JSON.stringify(edited).slice(0, 350));
+    assert.equal(fs.readFileSync(outputPath, 'utf8'), 'vortex-edited-marker-2026\n');
+    const searched = await call('tools/call', {
+      name: 'start_search',
+      arguments: {
+        path: home, pattern: 'vortex-edited-marker-2026',
+        searchType: 'content', literalSearch: true, filePattern: '*.txt',
+        timeout_ms: 10000, device_id: 'e2e-machine'
+      }
+    });
+    assert.ok(!searched.isError, 'start_search failed: ' + JSON.stringify(searched).slice(0, 350));
+
     const listingDir = await call('tools/call', {
       name: 'list_directory', arguments: { path: home, device_id: 'e2e-machine' }
     });

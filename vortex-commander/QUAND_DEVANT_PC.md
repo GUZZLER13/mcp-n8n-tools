@@ -68,6 +68,15 @@ Puis, seulement après vérification du port et des services :
 Caddyfile actif, puis remplacer uniquement le routage de
 `mcp.guzzler-bot.cloud` après contrôle HTTPS/OAuth.
 
+### Tests de la passerelle (sans installer ChatGPT)
+
+Sur le VPS, utiliser bash verify.sh pour vérifier les endpoints locaux.
+Après sauvegarde et validation du Caddyfile, basculer le domaine de façon
+contrôlée puis exécuter bash verify-public.sh.
+
+Le test public exige HTTPS, OAuth et le blocage des routes d'administration.
+Ne pas l'utiliser comme preuve que le serveur a déjà été lié à ChatGPT.
+
 ## Etape 4 : ChatGPT
 
 Sur ChatGPT Web, connecter le serveur MCP (après activation HTTPS) :

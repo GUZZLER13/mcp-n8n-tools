@@ -149,3 +149,12 @@ L'alerte `zod` reste à examiner : son correctif impose un changement majeur
 (3 vers 4) et ne doit pas être forcé sans revue. Les alertes restantes ne
 sont pas masquées : nous conservons l'audit npm visible dans GitHub Actions.
 **Le déploiement public reste interdit tant que la sécurité n'est pas validée.**
+
+## Vérifications avant raccordement ChatGPT
+
+Exécuter bash verify.sh sur le VPS pour confirmer que la nouvelle passerelle
+répond uniquement sur localhost avec ses métadonnées OAuth. Après la bascule
+contrôlée de Caddy, bash verify-public.sh vérifie HTTPS, OAuth, le refus de
+requêtes MCP anonymes et l'inaccessibilité publique de l'administration.
+
+Les tests restent distincts de la connexion réelle de ChatGPT Plus.
