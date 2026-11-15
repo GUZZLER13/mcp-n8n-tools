@@ -26,12 +26,16 @@ const device = JSON.parse(fs.readFileSync(devicePath, 'utf8'));
 if (!device.device_id || !device.device_secret || !device.gateway) {
   throw new Error('Invalid device config: credentials and endpoint must be present');
 }
-const privacy = fs.existsSync(privacyPath)
-  ? JSON.parse(fs.readFileSync(privacyPath, 'utf8'))
-  : {};
-privacy.telemetryEnabled = false;
-// Configure privacy *before* first backend launch. Existing unrelated keys survive.
-savePrivateJson(privacyPath, privacy);
+// Desktop Commander uses a shared config under HOME. On this VPS the real,
+// already paired Desktop Commander has an existing config: never rewrite it,
+// its telemetry setting or its file permissions during VORTEX activation.
+if (fs.existsSync(privacyPath)) {
+  JSON.parse(fs.readFileSync(privacyPath, 'utf8')); // fail on malformed input
+  console.log('Existing Desktop Commander configuration preserved unchanged.');
+} else {
+  savePrivateJson(privacyPath, { telemetryEnabled: false });
+  console.log('New Desktop Commander configuration created with telemetry disabled.');
+}
 device.desktop_commander = { command: [process.execPath, executable] };
 savePrivateJson(devicePath, device);
-console.log('Pinned local backend configured; telemetry disabled. Credentials were not printed.');
+console.log('Pinned local backend configured. Credentials were not printed.');
