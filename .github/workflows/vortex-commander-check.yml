@@ -1,0 +1,30 @@
+name: VORTEX Commander bootstrap — script checks
+on:
+  push:
+    branches: [vortex-commander-bootstrap]
+    paths:
+      - 'vortex-commander/**'
+      - '.github/workflows/vortex-commander-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse shell scripts
+        run: |
+          set -euo pipefail
+          for f in vortex-commander/*.sh; do bash -n "$f"; done
+      - name: Lint shell scripts
+        run: |
+          set -euo pipefail
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -S warning vortex-commander/*.sh
+          else
+            echo "shellcheck non preinstalle, syntaxe Bash controlee ci-dessus"
+          fi
