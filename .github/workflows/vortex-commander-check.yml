@@ -103,6 +103,14 @@ jobs:
             (Resolve-Path 'vortex-commander/windows-agent.ps1').Path,
             [ref]$tokens, [ref]$parseErrors) | Out-Null
           if ($parseErrors.Count -ne 0) { throw "PowerShell parse errors: $parseErrors" }
+          $tokens = $null
+          $preflightErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/preflight-windows.ps1').Path,
+            [ref]$tokens, [ref]$preflightErrors) | Out-Null
+          if ($preflightErrors.Count -ne 0) { throw "Windows preflight parser errors: $preflightErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/preflight-windows.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows preflight failed' }
       - name: Install source dependencies without lifecycle scripts
         working-directory: upstream
         run: npm ci --ignore-scripts --no-audit --no-fund

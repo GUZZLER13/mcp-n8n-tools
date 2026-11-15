@@ -20,9 +20,7 @@ SSH/SFTP via le VPS reste uniquement une solution de repli.
 4. Vérifier Node.js >=22.13, npm/npx et les permissions de processus persistants.
 5. Ne pas arrêter ni désinstaller l'ancien agent avant que le nouveau soit validé.
 
-Le binaire Desktop Commander local utilisé par SelfHostDesktopMCP est lancé
-via `npx -y @wonderwhy-er/desktop-commander@latest`.
-Le composant agent est fourni par le dépôt SelfHostDesktopMCP.
+Notre adaptation lance le moteur Desktop Commander local épinglé en version `0.3.3`, via Node.js, sans `npx @latest` et sans scripts de post-installation npm. La passerelle et l'agent proviennent du commit contrôlé de SelfHostDesktopMCP.
 
 ## Appairage (après validation du serveur)
 
@@ -33,11 +31,13 @@ cd ~/remote-mcp
 node gateway/admin.js pair
 ```
 
-Côté seedbox, depuis une copie approuvée des sources et avec Node compatible :
+Côté seedbox, depuis le dossier `vortex-commander` de notre dépôt, avec Node compatible et après activation HTTPS :
 
 ```bash
-node agent/agent.js pair https://mcp.guzzler-bot.cloud --device-id seedbox-io
-node agent/agent.js
+bash linux-agent.sh status seedbox-io
+bash linux-agent.sh prepare seedbox-io
+bash linux-agent.sh pair seedbox-io
+bash linux-agent.sh run seedbox-io
 ```
 
 L'appairage exige une validation explicite sur le VPS.

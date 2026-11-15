@@ -130,3 +130,10 @@ nécessaires (ex. un point de montage de stockage) et configurer une
 **autorisation explicite** dans les paramètres locaux de Desktop Commander,
 sans supprimer les protections des clés SSH et des jetons. Ne pas modifier
 l'accès général à tout le système par défaut.
+
+## Dossier de reprise Windows (y compris PC d'Enzo)
+
+Voir [QUAND_DEVANT_PC.md](QUAND_DEVANT_PC.md), le diagnostic Windows
+[preflight-windows.ps1](preflight-windows.ps1) et le
+[plan des cinq appareils](device-plan.json). Aucun secret d'appairage
+n'est stocke dans ces fichiers.
