@@ -30,6 +30,18 @@ policy = exact(policy, sourceLine, [expansion, modifiedLine, normalized].join('\
 policy = exact(policy, 'CASE(text).includes', 'CASE(normalizedText).includes', 2);
 put('agent/policy.js', policy);
 
+// ChatGPT's OAuth integration relies on advertised offline refresh access.
+// Upstream already issues and rotates refresh tokens, but omits offline_access
+// from the RFC metadata. Advertise the existing behavior explicitly.
+let oauthSource = get('gateway/oauth.js');
+oauthSource = exact(oauthSource,
+  "scopes_supported: ['mcp'], authorization_response_iss_parameter_supported: true,",
+  "scopes_supported: ['mcp', 'offline_access'], authorization_response_iss_parameter_supported: true,");
+oauthSource = exact(oauthSource,
+  "refresh_token: refresh, scope: 'mcp'",
+  "refresh_token: refresh, scope: 'mcp offline_access'");
+put('gateway/oauth.js', oauthSource);
+
 let agent = get('agent/agent.js');
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,

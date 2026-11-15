@@ -158,3 +158,16 @@ contrôlée de Caddy, bash verify-public.sh vérifie HTTPS, OAuth, le refus de
 requêtes MCP anonymes et l'inaccessibilité publique de l'administration.
 
 Les tests restent distincts de la connexion réelle de ChatGPT Plus.
+
+## Conservation de la connexion OAuth
+
+La passerelle SelfHostDesktopMCP émet déjà des jetons de renouvellement avec
+rotation. Notre adaptation annonce désormais explicitement le scope
+`offline_access` dans les métadonnées OAuth, afin de faciliter une connexion
+ChatGPT persistante, conformément aux indications de la documentation
+OpenAI. Le test automatique couvre la découverte, PKCE, l'écriture réelle
+via OAuth, le renouvellement et l'invalidation de l'ancien jeton.
+
+**Cela n'accorde pas à ChatGPT Plus de droits MCP que son abonnement
+n'autoriserait pas** : il faudra vérifier la disponibilité des outils
+d'écriture dans le compte réel avant toute migration.

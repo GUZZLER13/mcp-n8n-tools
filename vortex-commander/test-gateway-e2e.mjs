@@ -178,6 +178,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     const discovery = await (await fetch(base + '/.well-known/oauth-authorization-server')).json();
     assert.equal(discovery.issuer, issuer);
     assert.equal(discovery.token_endpoint, issuer + '/token');
+    assert.ok(discovery.scopes_supported.includes('offline_access'), 'OAuth must advertise refresh access to ChatGPT');
     const registration = await fetch(base + '/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
