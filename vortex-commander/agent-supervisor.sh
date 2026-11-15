@@ -11,14 +11,16 @@ UNIT="$HOME/.config/systemd/user/vortex-commander-agent.service"
 NAME="vortex-commander"
 NODE="$(command -v node || true)"
 if [[ "$(id -u)" -eq 0 ]]; then echo "Root interdit"; exit 1; fi
+if [[ "$ACTION" == "start" ]]; then
 if [[ ! -f "$HOME/.config/remote-mcp/device.json" ]]; then
-  echo "Agent non appareille. Faire linux-agent.sh pair avant supervision."; exit 2
-fi
-if [[ ! -f "$DEST/agent/agent.js" || -z "$NODE" ]]; then
-  echo "Agent ou Node.js introuvable"; exit 3
-fi
-if [[ -e "$HOME/remote-mcp/gateway/server.js" ]]; then
-  echo "Ce script est reserve au NAS et a la seedbox, pas au serveur de passerelle."; exit 4
+    echo "Agent non appareille. Faire linux-agent.sh pair avant supervision."; exit 2
+  fi
+  if [[ ! -f "$DEST/agent/agent.js" || -z "$NODE" ]]; then
+    echo "Agent ou Node.js introuvable"; exit 3
+  fi
+  if [[ -e "$HOME/remote-mcp/gateway/server.js" ]]; then
+    echo "Ce script est reserve au NAS et a la seedbox, pas au serveur de passerelle."; exit 4
+  fi
 fi
 case "$ACTION:$MODE" in
   start:systemd)
