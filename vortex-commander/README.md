@@ -206,6 +206,13 @@ Pour l'installer sur le VPS **avant la premiere activation** :
     git -C ~/vortex-commander-kit pull --ff-only
     bash ~/vortex-commander-kit/vortex-commander/install-vps-user-policy.sh
 
+L'installateur ecrit aussi les parametres de Desktop Commander
+(`allowedDirectories: []`, commandes ordinaires permises par le compte
+`stef`, `telemetryEnabled: false`) **seulement si sa configuration
+n'existe pas deja**. Si elle existe, il ne l'ecrase pas et demande un
+controle manuel des limites. Ainsi, les deux niveaux de permissions
+correspondent au profil d'administration etendue.
+
 L'installateur ne remplace pas une politique existante et ne lance pas
 l'agent. Pour des droits root ou Docker supplementaires, decider
 explicitement de commandes et ressources bien definies ; ne pas donner
