@@ -20,6 +20,17 @@ for name in remote-mcp-agent remote-mcp-gateway; do
     echo "Service utilisateur deja present: $name.service. Aucune modification."; exit 6
   fi
 done
+# The VPS was prepared before we fixed shared Desktop Commander config
+# preservation. Refuse startup until the reviewed helper matches this kit.
+kit_helper="$(cd "$(dirname "$0")" && pwd)/configure-backend.mjs"
+prepared_helper="$HOME/remote-mcp/agent/configure-backend.mjs"
+if [[ ! -f "$kit_helper" || ! -f "$prepared_helper" ]] || ! cmp -s "$kit_helper" "$prepared_helper"; then
+  echo "Ancien configure-backend detecte : mise a jour manuelle requise."
+  echo 'cp "$HOME/vortex-commander-kit/vortex-commander/configure-backend.mjs" "$HOME/remote-mcp/agent/configure-backend.mjs"'
+  echo "Aucun service demarre."
+  exit 7
+fi
+
 cd "$HOME/remote-mcp"
 PUBLIC_URL=https://mcp.guzzler-bot.cloud BIND_HOST=127.0.0.1 \
   DEVICE_ID=vps-hetzner bash deploy/install-linux.sh
