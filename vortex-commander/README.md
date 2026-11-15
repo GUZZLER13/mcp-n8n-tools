@@ -185,3 +185,31 @@ Notre passerelle utilise désormais `127.0.0.1:8766` dans l'unité systemd,
 la connexion de l'agent VPS et le contrôle local. Ne pas arrêter le
 processus Python ni modifier Caddy avant une validation locale et un
 plan de retour arrière.
+
+## Mode d'administration etendue (VPS, a activer explicitement)
+
+Le profil optionnel `policy-vps-admin-user.json` autorise les outils MCP
+usuels a manipuler **tous les fichiers et processus auxquels le compte OS
+`stef` a deja acces**, notamment les volumes montes et les commandes
+`systemctl --user`, `git` et de maintenance normale. Le profil ne fixe
+aucune liste de repertoires autorises (`allowed_paths: []`).
+
+Il conserve en revanche la protection des dossiers de secrets et de la
+configuration du nouveau MCP ; il refuse l'escalade directe
+(`sudo` / `su` / `doas`), les commandes de destruction catastrophique
+et la modification distante des restrictions de Desktop Commander.
+**Ce profil n'accorde pas root et n'est pas un bac a sable : un interpreteur
+de commandes peut contourner des controles textuels.**
+
+Pour l'installer sur le VPS **avant la premiere activation** :
+
+    git -C ~/vortex-commander-kit pull --ff-only
+    bash ~/vortex-commander-kit/vortex-commander/install-vps-user-policy.sh
+
+L'installateur ne remplace pas une politique existante et ne lance pas
+l'agent. Pour des droits root ou Docker supplementaires, decider
+explicitement de commandes et ressources bien definies ; ne pas donner
+`NOPASSWD: ALL`, `chmod 777` ni monter le socket Docker dans un agent
+ChatGPT public. L'activation HTTPS/OAuth doit etre validee avant tout
+controle distant. Le profil n'est pas copie automatiquement sur la seedbox,
+le NAS ou les PC Windows.
