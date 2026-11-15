@@ -22,7 +22,7 @@ cd "$TMP/upstream"
 git checkout --quiet --detach "$PIN"
 [[ "$(git rev-parse HEAD)" == "$PIN" ]] || { echo "Commit inattendu"; exit 4; }
 # Separate source checkout prevents a remote install script from being executed.
-git clone --quiet --depth 1 --branch vortex-commander-bootstrap \
+git clone --quiet --depth 1 --branch vortex-commander-hardening \
   https://github.com/GUZZLER13/mcp-n8n-tools.git "$TMP/kit"
 node "$TMP/kit/vortex-commander/patch-upstream.mjs" "$TMP/upstream"
 npm ci --ignore-scripts --no-audit --no-fund
