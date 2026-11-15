@@ -133,12 +133,21 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     });
     assert.ok(!write.isError, 'write_file failed: ' + JSON.stringify(write).slice(0, 400));
     assert.equal(fs.readFileSync(outputPath, 'utf8'), 'vortex-write-marker-2026\n');
+    const listingDir = await call('tools/call', {
+      name: 'list_directory', arguments: { path: home, device_id: 'e2e-machine' }
+    });
+    assert.ok(!listingDir.isError, 'list_directory failed: ' + JSON.stringify(listingDir).slice(0, 350));
+    assert.match(JSON.stringify(listingDir.content), /read-test\.txt/);
+    const processCall = await call('tools/call', {
+      name: 'start_process', arguments: { command: 'pwd', device_id: 'e2e-machine' }
+    });
+    assert.ok(!processCall.isError, 'start_process failed: ' + JSON.stringify(processCall).slice(0, 350));
     const forbidden = await call('tools/call', {
       name: 'read_file', arguments: { path: path.join(os.homedir(), '.ssh/id_ed25519'), device_id: 'e2e-machine' }
     });
     assert.equal(forbidden.isError, true, 'Sensitive path should be denied');
     assert.ok(!failures.length, failures.join('; '));
-    console.log('Complete MCP chain: authenticated, device online, real read/write passed, sensitive path denied.');
+    console.log('Complete MCP chain: authenticated, device online, real list/read/write/process passed, sensitive path denied.');
   } finally {
     for (const p of procs) p.kill();
     await sleep(600);
