@@ -1,13 +1,48 @@
-# Windows — installation à valider
+# VORTEX Commander — STEF-PC et ENZO-LAPTOP
 
-SelfHostDesktopMCP ne fournit pas d'installateur automatique de service Windows dans sa version auditée.
+La suite originale SelfHostDesktopMCP échoue sous Windows (verrous SQLite,
+contrôles de chemins sensibles et hypothèses de permissions Unix).
+La branche vortex-commander-hardening applique des correctifs ciblés et vérifie
+le démarrage réel du moteur Desktop Commander local en CI. Elle n'a pas encore
+été testée sur tes vrais PC.
 
-1. Installer Node.js >=22.13 et Git sur chaque PC.
-2. Cloner le projet upstream sur le PC et vérifier l'installation.
-3. Appairer le PC à la passerelle **après** activation HTTPS et OAuth sur le VPS.
-4. Tester une lecture de dossier non sensible et un terminal inoffensif.
-5. Vérifier le lancement de Desktop Commander stdio Windows : la commande `npx` du projet peut exiger une adaptation pour Windows (ne pas supposer que cela fonctionne).
-6. Installer ensuite seulement un démarrage automatique sous un compte Windows limité.
+## Préparer (sans terminal administrateur)
 
-Ne pas désactiver la sécurité de Windows ni exécuter l'agent en administrateur. 
-Ne pas stocker de clé API, token propriétaire ou secret dans GitHub.
+Pré-requis : Node.js >= 22.13, Git, npm, et une copie du dossier
+vortex-commander de la branche vortex-commander-hardening.
+Dans PowerShell ouvert dans ce dossier :
+
+    .\windows-agent.ps1 -Action Status
+    .\windows-agent.ps1 -Action Prepare
+
+La préparation ne démarre aucun service et n'ouvre aucun port. Elle clone un
+commit fixe de SelfHostDesktopMCP et installe Desktop Commander 0.3.3
+sans exécuter les scripts npm de post-installation.
+
+## Associer (après activation et vérification de la passerelle VPS)
+
+Ouvrir la fenêtre d'appairage sur le VPS dans un terminal privé :
+
+    cd ~/remote-mcp
+    node gateway/admin.js pair
+
+Sur STEF-PC (non-admin) :
+
+    .\windows-agent.ps1 -Action Pair -DeviceId stef-pc
+    .\windows-agent.ps1 -Action Run
+
+Sur ENZO-LAPTOP remplacer stef-pc par enzo-laptop.
+Les jetons sont conservés localement, pas dans GitHub ni dans ChatGPT.
+
+## Tests requis sur les PC
+
+- L'appareil apparaît avec son identifiant dans devices_list.
+- read_file, list_directory, edit_block et write_file fonctionnent uniquement
+  dans des dossiers de tests autorisés.
+- start_process fonctionne pour des commandes non dangereuses.
+- Les chemins de secrets et dossiers SSH ne sont pas accessibles.
+- L'agent se reconnecte après veille/réouverture de la session.
+- L'agent tourne avec les droits ordinaires du compte Windows.
+
+Démarrage automatique : volontairement différé jusqu'aux tests sur les vrais
+ordinateurs. Ne pas désactiver les protections Windows.
