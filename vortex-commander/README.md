@@ -38,7 +38,7 @@ curl -fsSLo vc-stop.sh https://raw.githubusercontent.com/GUZZLER13/mcp-n8n-tools
 bash vc-stop.sh
 ```
 
-L'acces via ChatGPT Plus aux outils d'ecriture reste a valider par un test en conditions reelles. La compatibilite Windows et l'agent sur seedbox restent aussi a verifier.
+L'acces via ChatGPT Plus aux outils d'ecriture reste a valider par un test en conditions reelles. La compatibilite Windows reste a corriger. La seedbox avait deja un agent Remote Desktop Commander en ligne : l'agent direct est prioritaire ; sa compatibilite avec cette nouvelle passerelle reste a tester.
 
 ## Mise en route locale (après audit)
 
@@ -53,3 +53,16 @@ curl -i http://127.0.0.1:8765/health
 La connexion MCP ChatGPT via OAuth, les outils d'écriture et la compatibilité Windows sont encore **à vérifier**. Le projet ne doit pas être lancé en root, ni servir de shell non protégé. L'ancien VPS Bridge ne sera arrêté qu'après validation réelle.
 
 Documentation détaillée également dans le kit ZIP produit dans la discussion.
+
+## Seedbox deja equipee de Desktop Commander
+
+L'ancien agent Remote Desktop Commander sur `dsb39911.seedbox.io` etait
+**en ligne** lors de la verification de nos appareils. La migration vise donc
+un agent VORTEX Commander directement sur la seedbox, et non seulement un
+pont SSH/SFTP. Voir [seedbox.md](seedbox.md) et le diagnostic sans modification
+[seedbox-preflight.sh](seedbox-preflight.sh).
+
+Le test GitHub Linux de SelfHostDesktopMCP a reussi ; sur Windows, des echecs
+amont persistent (notamment verrouillage SQLite, tests de chemins et erreurs
+de lancement de commandes). **Ne pas installer sur les deux PC avant
+adaptation et validation explicites.**
