@@ -68,6 +68,26 @@ jobs:
           npm install --prefix "$HOME/.local/share/vortex-commander/backend" \
             --ignore-scripts --no-audit --no-fund --save-exact \
             '@wonderwhy-er/desktop-commander@0.3.3'
+      - name: Audit production dependency vulnerabilities (informational)
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend="$HOME/.local/share/vortex-commander/backend"
+          report="$RUNNER_TEMP/vortex-npm-audit.json"
+          npm audit --prefix "$backend" --omit=dev --json > "$report" || true
+          node - "$report" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          let report;
+          try { report = JSON.parse(fs.readFileSync(file, 'utf8')); }
+          catch (e) { console.log('::warning::npm audit report unavailable: ' + e.message); process.exit(0); }
+          if (report.error) { console.log('::warning::npm audit could not complete: ' + String(report.error.summary || report.error.code)); process.exit(0); }
+          const counts = report.metadata && report.metadata.vulnerabilities;
+          if (!counts) { console.log('::warning::npm audit returned no vulnerability summary'); process.exit(0); }
+          console.log('VORTEX pinned backend npm audit: ' + JSON.stringify(counts));
+          if ((counts.critical || 0) + (counts.high || 0) > 0)
+            console.log('::warning::High/critical production advisories exist; review before VPS deployment.');
+          NODE
       - name: Authenticated HTTP gateway to real agent read/write smoke
         shell: bash
         run: |

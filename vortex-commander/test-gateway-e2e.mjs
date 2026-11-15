@@ -121,6 +121,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     }, 60000);
     const listing = await call('tools/list', {});
     const names = listing.tools.map(t => t.name);
+    console.log('MCP tool surface (' + names.length + '): ' + names.join(', '));
     assert.ok(names.includes('read_file'), 'real backend read_file not exposed');
     assert.ok(names.includes('write_file'), 'real backend write_file not exposed');
     const read = await call('tools/call', {
