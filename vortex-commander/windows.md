@@ -45,7 +45,11 @@ Les jetons sont conservés localement, pas dans GitHub ni dans ChatGPT.
 - L'agent tourne avec les droits ordinaires du compte Windows.
 
 Démarrage automatique FACULTATIF : seulement APRES avoir valide Run sur le vrai PC.
-Le script cree un raccourci utilisateur dans le dossier de demarrage, sans admin :
+Le script cree un raccourci utilisateur dans le dossier de demarrage, sans admin,
+qui lance windows-watchdog.ps1. Ce superviseur relance automatiquement le
+nouvel agent apres une sortie inattendue (pause de 15 s), et l'agent gere
+lui-meme la reconnexion reseau apres veille ou coupure Internet. Le superviseur
+s'arrete si l'appareil est revoque. Il ne gere jamais l'ancien Desktop Commander :
 
     .\windows-agent.ps1 -Action Autostart
 
