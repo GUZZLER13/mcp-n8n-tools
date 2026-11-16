@@ -149,6 +149,12 @@ jobs:
           & powershell.exe -NoProfile -File 'vortex-commander/preflight-windows.ps1'
           if ($LASTEXITCODE -ne 0) { throw 'Windows preflight failed' }
           $tokens = $null
+          $watchdogErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-watchdog.ps1').Path,
+            [ref]$tokens, [ref]$watchdogErrors) | Out-Null
+          if ($watchdogErrors.Count -ne 0) { throw "Windows watchdog parser errors: $watchdogErrors" }
+          $tokens = $null
           $assistantErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path 'vortex-commander/pc-assistant.ps1').Path,
