@@ -74,13 +74,18 @@ switch ($Action) {
         if (-not (Test-Path $Config)) { throw 'Pair and test Run first' }
         $Startup = [Environment]::GetFolderPath('Startup')
         $Target = Join-Path $Startup 'VORTEX Commander.cmd'
-        $AgentScript = Join-Path $Dest 'agent\agent.js'
-        if (-not (Test-Path $AgentScript)) { throw 'Agent missing' }
+        $Watchdog = Join-Path $PSScriptRoot 'windows-watchdog.ps1'
+        if (-not (Test-Path -LiteralPath $Watchdog -PathType Leaf)) { throw 'Windows watchdog missing' }
+        if (-not (Test-Path -LiteralPath (Join-Path $Dest 'agent\agent.js') -PathType Leaf)) { throw 'Agent missing' }
+        # This installs ONLY a per-user logon shortcut, no Windows service,
+        # registry Run key, scheduled task, or change to the old Desktop Commander.
         $Content = '@echo off' + [Environment]::NewLine +
-            'start "" /min "' + $Node + '" "' + $AgentScript + '"' +
+            'start "" /min powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $Watchdog + '"' +
             [Environment]::NewLine
         [IO.File]::WriteAllText($Target, $Content, [Text.UTF8Encoding]::new($false))
-        Write-Host 'User-level startup configured. Run RemoveAutostart to undo.'
+        Write-Host 'User logon autostart configured with automatic crash restart.'
+        Write-Host 'It starts on Windows SIGN-IN, not before login and not if the PC is powered off.'
+        Write-Host 'To undo: -Action RemoveAutostart.'
     }
     RemoveAutostart {
         $Target = Join-Path ([Environment]::GetFolderPath('Startup')) 'VORTEX Commander.cmd'
