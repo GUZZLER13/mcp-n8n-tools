@@ -56,20 +56,24 @@ Le banc local exclut le temps de raisonnement de ChatGPT, la latence de l'interf
 ## Optimisation du relais ajoutée à la PR n° 2 (non déployée)
 
 L'adaptation de la version **épinglée** de SelfHostDesktopMCP (`patch-upstream.mjs`)
-expose un outil supplémentaire, `quick_checks`. Il réduit les allers-retours HTTP
+propose `quick_checks` via l'outil générique existant `tool_call`, sans ajouter
+une définition à la liste stable des outils MCP. Il réduit les allers-retours HTTP
 pour **1 à 4 contrôles indépendants** (sans ajouter de serveur ni processus
 permanent). Exemple pour notre VPS :
 
 ```json
 {
-  "name": "quick_checks",
+  "name": "tool_call",
   "arguments": {
+    "name": "quick_checks",
     "device_id": "vps-hetzner",
-    "checks": [
-      { "type": "pwd" },
-      { "type": "uptime" },
-      { "type": "get_file_info", "path": "/home/stef/vortex-commander-kit/vortex-commander/README.md" }
-    ]
+    "arguments": {
+      "checks": [
+        { "type": "pwd" },
+        { "type": "uptime" },
+        { "type": "get_file_info", "path": "/home/stef/vortex-commander-kit/vortex-commander/README.md" }
+      ]
+    }
   }
 }
 ```
