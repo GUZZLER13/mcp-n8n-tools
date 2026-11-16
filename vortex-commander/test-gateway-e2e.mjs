@@ -185,6 +185,18 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     assert.ok(quickResults.results.every(x => x.elapsed_ms >= 0));
     assert.ok(quickResults.results.every(x => (x.preview || '').length <= 400));
 
+    // Terminal backends can lose stdout when commands are launched together.
+    // The batch implementation must serialize command checks and preserve output.
+    const commandQuick = await batchChecks([
+      { type: 'pwd' }, { type: 'whoami' }, { type: 'uptime' }
+    ]);
+    assert.notEqual(commandQuick.isError, true, 'sequential command batch should succeed');
+    const commandResults = JSON.parse(commandQuick.content[0].text).results;
+    assert.equal(commandResults.length, 3);
+    assert.ok(commandResults.every(r => r.ok === true), 'each command must succeed');
+    assert.ok(commandResults[1].preview.includes(os.userInfo().username),
+      'whoami output must not be lost in a batch');
+
     const badQuick = await batchChecks([{ type: 'whoami', command: 'rm -rf /' }]);
     assert.equal(badQuick.isError, true, 'Arbitrary command arguments must be rejected');
     assert.match(JSON.stringify(badQuick.structuredContent || badQuick.content), /INVALID_ARGUMENT/);
