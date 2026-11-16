@@ -18,6 +18,31 @@ node "$HOME/vortex-perf-review/vortex-commander/benchmark-latency.mjs" --samples
 
 Par défaut le script mesure uniquement `/health`, `devices_list` et `tools_list`. Ajouter `--exec` pour mesurer en plus un simple `whoami` sur chaque machine ; cette opération démarre un processus sans privilèges supplémentaires et mesure l'accusé de réception, **pas** l'achèvement du processus. `--json` fournit un résumé exploitable plus tard par un tableau de bord. Nombre d'échantillons autorisé : 2 à 30.
 
+## Lecture immédiate des durées existantes, sans identifiants
+
+Les journaux de la passerelle contiennent déjà la durée des appels MCP (et leur statut), **sans les arguments des commandes**. Leur analyse peut être lancée depuis VORTEX, car elle ne lit aucun secret :
+
+```bash
+node "$HOME/vortex-perf-review/vortex-commander/benchmark-audit.mjs" --hours=24 --min-samples=5
+```
+
+Ajouter `--json` pour obtenir des agrégats exploitables par le futur tableau de bord. Les durées comprennent l'attente d'exécution des commandes : il ne faut pas assimiler une commande longue à de la latence réseau.
+
+### Première mesure observée le 16 novembre 2026
+
+Résumé des appels réussis enregistrés dans le journal de la passerelle sur les dernières 24 heures, sans harmoniser les commandes :
+
+| Appareil | Outil | Échantillons | Médiane | p95 |
+|---|---|---:|---:|---:|
+| VPS | `write_file` | 25 | 25 ms | 37 ms |
+| VPS | `edit_block` | 27 | 49 ms | 82 ms |
+| VPS | `start_process` | 467 | 796 ms | 16 092 ms |
+| STEF-PC | `start_process` | 46 | 827 ms | 4 750 ms |
+| PC NAS | `start_process` | 8 | 122 ms | 263 ms |
+| Seedbox | `start_process` | 14 | 119 ms | 1 065 ms |
+
+Ces catégories mélangent des travaux de durées différentes et les échantillons sont inégaux. Elles **ne prouvent pas qu'un appareil est plus lent**. Elles suggèrent surtout une optimisation d'usage : privilégier les outils de fichiers directs et limiter les processus terminal inutiles. Pour comparer la vitesse des machines, il faut mesurer le **même `whoami`** sur chacune avec le banc local.
+
 ## Mesurer correctement
 
 1. Relever une base de référence avec 10 à 20 échantillons, en gardant la même version du logiciel, la même machine et les mêmes options.
