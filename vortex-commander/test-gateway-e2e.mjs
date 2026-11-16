@@ -194,7 +194,7 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     const commandResults = JSON.parse(commandQuick.content[0].text).results;
     assert.equal(commandResults.length, 3);
     assert.ok(commandResults.every(r => r.ok === true), 'each command must succeed');
-    assert.match(commandResults[1].preview, /Initial output:\\n[^\\n]+/,
+    assert.ok(commandResults[1].preview.includes(os.userInfo().username),
       'whoami output must not be lost in a batch');
 
     const badQuick = await batchChecks([{ type: 'whoami', command: 'rm -rf /' }]);
