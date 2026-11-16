@@ -166,6 +166,39 @@ test('complete read/write MCP relay through the actual Desktop Commander', { tim
     });
     assert.ok(!processCall.isError, 'start_process failed: ' + JSON.stringify(processCall).slice(0, 350));
 
+    // No extra MCP tool definition: the existing tool_call routes a bounded
+    // virtual quick_checks operation; all subcalls still enforce device policy.
+    async function batchChecks(checks) {
+      return call('tools/call', {
+        name: 'tool_call',
+        arguments: { device_id: 'e2e-machine', name: 'quick_checks', arguments: { checks } }
+      });
+    }
+    const quick = await batchChecks([
+      { type: 'get_file_info', path: inputPath },
+      { type: 'list_directory', path: home }
+    ]);
+    assert.notEqual(quick.isError, true, 'quick_checks should succeed');
+    const quickResults = JSON.parse(quick.content[0].text);
+    assert.equal(quickResults.results.length, 2);
+    assert.ok(quickResults.results.every(x => x.ok === true));
+    assert.ok(quickResults.results.every(x => x.elapsed_ms >= 0));
+    assert.ok(quickResults.results.every(x => (x.preview || '').length <= 400));
+
+    const badQuick = await batchChecks([{ type: 'whoami', command: 'rm -rf /' }]);
+    assert.equal(badQuick.isError, true, 'Arbitrary command arguments must be rejected');
+    assert.match(JSON.stringify(badQuick.structuredContent || badQuick.content), /INVALID_ARGUMENT/);
+    const tooMany = await batchChecks(Array.from({ length: 5 }, () => ({ type: 'pwd' })));
+    assert.equal(tooMany.isError, true, 'More than 4 checks must be rejected');
+
+    // Denied locations must also fail inside a batch.
+    const forbiddenQuick = await batchChecks([
+      { type: 'get_file_info', path: path.join(os.homedir(), '.ssh/id_ed25519') }
+    ]);
+    const deniedResult = JSON.parse(forbiddenQuick.content[0].text).results[0];
+    assert.equal(deniedResult.ok, false, 'Batch must not bypass sensitive path policy');
+    assert.equal(deniedResult.error, 'POLICY_DENIED');
+
     // Reproduce the ChatGPT custom MCP OAuth flow: discovery -> dynamic
     // registration -> owner consent -> PKCE exchange -> authenticated MCP
     // session -> real device write -> refresh rotation. Test secrets are
