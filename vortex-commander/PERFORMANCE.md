@@ -6,12 +6,7 @@ Ce document concerne la passerelle familiale et les agents `vps-hetzner`, `stef-
 
 Depuis une **session SSH locale autorisée sur le VPS**, avec le compte propriétaire de la passerelle (pas root) :
 
-```bash
-git -C "$HOME/vortex-commander-kit" fetch origin vortex-performance-20261116
-node "$HOME/vortex-commander-kit/vortex-commander/benchmark-latency.mjs" --samples=10
-```
-
-La deuxième commande n'exécutera la nouvelle version du banc de mesure que si le fichier se trouve sur le bon checkout. Pour la tester isolément, utiliser un checkout de la branche `vortex-performance-20261116` dans un répertoire séparé, **sans remplacer le kit actuellement déployé** :
+Pour tester la branche isolément, utiliser un checkout séparé, **sans remplacer le kit actuellement déployé** :
 
 ```bash
 git clone --quiet --single-branch --branch vortex-performance-20261116 \
