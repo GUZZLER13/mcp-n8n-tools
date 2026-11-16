@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [vortex-commander-hardening]
     paths:
+      - 'vortex-commander/patch-upstream.mjs'
+      - 'vortex-commander/test-gateway-e2e.mjs'
       - 'vortex-commander/benchmark-latency.mjs'
       - 'vortex-commander/benchmark-audit.mjs'
       - 'vortex-commander/PERFORMANCE.md'
@@ -41,3 +43,47 @@ jobs:
             exit 1
           fi
           echo 'VORTEX benchmark CLI smoke passed'
+
+  pinned-regression:
+    name: Pinned gateway + real agent read-only batch regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply fail-closed overlay and validate syntax
+        run: |
+          node --check vortex-commander/patch-upstream.mjs
+          node --check vortex-commander/test-gateway-e2e.mjs
+          node vortex-commander/patch-upstream.mjs upstream
+          node --check upstream/gateway/server.js
+          node --check upstream/agent/agent.js
+      - name: Pinned upstream unit and security tests
+        run: |
+          npm ci --prefix upstream --ignore-scripts --no-audit --no-fund
+          npm test --prefix upstream
+      - name: Install pinned sandboxed backend for end-to-end tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend="$HOME/.local/share/vortex-commander/backend"
+          npm install --prefix "$backend" --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
+          npm pkg set --prefix "$backend" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1
+          npm install --prefix "$backend" --ignore-scripts --no-audit --no-fund
+      - name: End-to-end authenticated batch, policy denials and OAuth regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp vortex-commander/test-gateway-e2e.mjs upstream/test/vortex-performance-e2e.test.js
+          cd upstream
+          node --test test/vortex-performance-e2e.test.js
