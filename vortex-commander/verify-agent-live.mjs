@@ -64,7 +64,7 @@ async function main() {
       device_id: 'vps-hetzner', name: target, arguments: { path: targetPath }
     }
   }, 4);
-  assert.equal(reading.isError, undefined, target + ' backend error');
+  assert.notEqual(reading.isError, true, target + ' backend error');
   assert(reading.content?.length > 0, 'No backend content');
   console.log('OK: outil ' + target + ' execute sur un fichier de test du VPS.');
   console.log('Aucun fichier modifie. Aucun secret affiche.');
