@@ -1,0 +1,40 @@
+name: VORTEX Commander - latency benchmark smoke
+
+on:
+  pull_request:
+    branches: [vortex-commander-hardening]
+    paths:
+      - 'vortex-commander/benchmark-latency.mjs'
+      - 'vortex-commander/PERFORMANCE.md'
+      - '.github/workflows/vortex-performance-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and safe CLI behavior (no gateway or credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check vortex-commander/benchmark-latency.mjs
+          node vortex-commander/benchmark-latency.mjs --help | grep -q 'samples=5'
+          if node vortex-commander/benchmark-latency.mjs --samples=1 >/dev/null 2>&1; then
+            echo 'Invalid sample count was accepted'
+            exit 1
+          fi
+          if node vortex-commander/benchmark-latency.mjs --unexpected >/dev/null 2>&1; then
+            echo 'Unknown option was accepted'
+            exit 1
+          fi
+          echo 'VORTEX benchmark CLI smoke passed'
