@@ -220,3 +220,30 @@ explicitement de commandes et ressources bien definies ; ne pas donner
 ChatGPT public. L'activation HTTPS/OAuth doit etre validee avant tout
 controle distant. Le profil n'est pas copie automatiquement sur la seedbox,
 le NAS ou les PC Windows.
+
+## Usage dans ChatGPT : limitation de forfait (verification 16/11/2026)
+
+Le serveur MCP est fonctionnel et publiquement joignable en HTTPS, mais cela
+ne suffit pas a rendre ses outils accessibles a une conversation ChatGPT.
+D'apres l'aide officielle OpenAI, l'ajout de **serveurs MCP personnalises**
+et le MCP complet (y compris les actions en ecriture) requierent actuellement
+un espace ChatGPT **Business, Enterprise ou Edu** et les autorisations
+correspondantes. **ChatGPT Plus ne donne pas acces a cet ajout** ; Pro est
+limite aux permissions de lecture/fetch. Un serveur pret et un owner token
+ne contournent pas cette limitation. Documentation :
+https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt
+
+Le controle en direct sur le VPS peut se faire sans changer d'abonnement :
+depuis la session SSH autorisee, lancer apres mise a jour du kit :
+
+    node "$HOME/vortex-commander-kit/vortex-commander/verify-agent-live.mjs"
+
+Ce controle lit le token administrateur **uniquement localement**, ouvre une
+session MCP sur 127.0.0.1:8766, verifie l'agent et lance un outil de
+consultation d'un fichier du kit. Il ne divulgue ni jeton ni contenu de fichier,
+ne modifie pas les projets et ferme sa session a la fin. Ne pas copier le
+contenu du token dans ChatGPT ou GitHub.
+
+Pour la gestion distante via les outils ChatGPT disponibles sans MCP personnalise,
+continuer avec GitHub (commits/PR et tests), et envisager une integration
+specifiquement approuvee plutot qu'une exposition anonyme du shell.
