@@ -1,0 +1,50 @@
+{
+  "project": "VORTEX Commander",
+  "branch": "vortex-commander-hardening",
+  "gateway": {
+    "id": "vps-hetzner",
+    "display_name": "VPS Hetzner",
+    "role": "gateway-and-agent",
+    "state": "not-deployed"
+  },
+  "devices": [
+    {
+      "id": "pc-nas",
+      "display_name": "PC NAS",
+      "role": "agent",
+      "platform": "linux-to-confirm",
+      "state": "not-paired",
+      "setup": "linux-agent.sh"
+    },
+    {
+      "id": "seedbox-io",
+      "display_name": "Seedbox.io",
+      "role": "agent",
+      "platform": "linux-to-confirm",
+      "state": "not-paired",
+      "setup": "linux-agent.sh",
+      "note": "previously had Remote Desktop Commander connected; direct agent first"
+    },
+    {
+      "id": "stef-pc",
+      "display_name": "STEF-PC",
+      "role": "agent",
+      "platform": "windows",
+      "state": "not-paired",
+      "setup": "windows-agent.ps1"
+    },
+    {
+      "id": "enzo-laptop",
+      "display_name": "ENZO-LAPTOP",
+      "role": "agent",
+      "platform": "windows",
+      "state": "not-paired",
+      "setup": "windows-agent.ps1"
+    }
+  ],
+  "constraints": {
+    "no_secrets_in_repository": true,
+    "non_root_agents": true,
+    "old_vps_bridge_stays_until_oauth_test": true
+  }
+}

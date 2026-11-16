@@ -1,0 +1,38 @@
+{
+  "_note": "VPS admin-etendu pour l'utilisateur stef (pas root). A utiliser uniquement apres audit et connexion OAuth. Toutes les commandes accessibles a stef sont possibles, sauf elevation de privileges et protections de l'agent/secrets.",
+  "replace_defaults": true,
+  "blocked_paths": [
+    "~/.ssh",
+    "~/.gnupg",
+    "~/.aws",
+    "~/.kube",
+    "~/.netrc",
+    "~/.config/gcloud",
+    "~/.config/remote-mcp",
+    "~/remote-mcp/secrets",
+    "~/remote-mcp/remote-mcp.db"
+  ],
+  "readonly_paths": [
+    "~/remote-mcp",
+    "~/.config/systemd"
+  ],
+  "allowed_paths": [],
+  "blocked_commands": [
+    "sudo",
+    "su",
+    "doas",
+    "passwd",
+    "visudo"
+  ],
+  "blocked_patterns": [
+    "rm\\s+(-\\w*\\s+)*-\\w*[rf]\\w*\\s+(--no-preserve-root\\s+)?(/|~|\\$HOME)(\\s|/?$)",
+    "dd\\s+.*of=/dev/",
+    ">\\s*/dev/(sd|nvme|disk)",
+    "curl[^|]*\\|\\s*(ba|z)?sh",
+    "wget[^|]*\\|\\s*(ba|z)?sh"
+  ],
+  "blocked_tools": [
+    "set_config_value"
+  ],
+  "allow_custom_backends": false
+}

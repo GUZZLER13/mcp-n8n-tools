@@ -1,0 +1,102 @@
+// VORTEX Commander deterministic adaptation of pinned SelfHostDesktopMCP.
+// Applies Windows filesystem policy fixes, safe local backend defaults, and
+// localhost routing on the VPS. Fail closed if upstream source is unexpected.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const kitDir = path.dirname(fileURLToPath(import.meta.url));
+const root = process.argv[2] && path.resolve(process.argv[2]);
+if (!root || !fs.existsSync(path.join(root, 'agent', 'agent.js'))) {
+  throw new Error('Usage: node patch-upstream.mjs /path/to/pinned-SelfHostDesktopMCP');
+}
+const get = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+const put = (rel, value) => fs.writeFileSync(path.join(root, rel), value, 'utf8');
+function exact(src, needle, replacement, count = 1) {
+  const n = src.split(needle).length - 1;
+  if (n !== count) {
+    throw new Error('Unexpected upstream: expected ' + count + ' matches, got ' + n + ' for ' + needle.slice(0, 75));
+  }
+  return src.split(needle).join(replacement);
+}
+
+let policy = get('agent/policy.js');
+const sourceLine = policy.split('\n').find(x => x.includes('const text = cmd.replace('));
+if (!sourceLine) throw new Error('Cannot find command-path policy');
+const expansion = '    const expandedCommand = cmd.replace(/%USERPROFILE%|\\$env:(?:USERPROFILE|HOME)/gi, home);';
+const modifiedLine = sourceLine.replace('cmd.replace(', 'expandedCommand.replace(');
+const normalized = '    const normalizedText = process.platform === "win32" ? text.replace(/\\//g, path.sep) : text;';
+policy = exact(policy, sourceLine, [expansion, modifiedLine, normalized].join('\n'));
+policy = exact(policy, 'CASE(text).includes', 'CASE(normalizedText).includes', 2);
+put('agent/policy.js', policy);
+
+// ChatGPT's OAuth integration relies on advertised offline refresh access.
+// Upstream already issues and rotates refresh tokens, but omits offline_access
+// from the RFC metadata. Advertise the existing behavior explicitly.
+let oauthSource = get('gateway/oauth.js');
+oauthSource = exact(oauthSource,
+  "scopes_supported: ['mcp'], authorization_response_iss_parameter_supported: true,",
+  "scopes_supported: ['mcp', 'offline_access'], authorization_response_iss_parameter_supported: true,");
+oauthSource = exact(oauthSource,
+  "refresh_token: refresh, scope: 'mcp'",
+  "refresh_token: refresh, scope: 'mcp offline_access'");
+put('gateway/oauth.js', oauthSource);
+
+let agent = get('agent/agent.js');
+// Never implicitly launch @latest; explicit pinned package setup is required.
+agent = exact(agent,
+  "desktop_commander: { command: ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'] }",
+  'desktop_commander: { command: [] }', 2);
+agent = exact(agent,
+  "const command = cfg.desktop_commander?.command ?? ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'];",
+  "const command = cfg.desktop_commander?.command;\n    if (!Array.isArray(command) || command.length < 2) throw new Error('Pinned Desktop Commander not configured: run agent/configure-backend.mjs');");
+const envLine = agent.split('\n').find(x => x.startsWith('const PASS_ENV = '));
+if (!envLine) throw new Error('Cannot find child process environment');
+agent = exact(agent, envLine,
+  "const PASS_ENV = ['DISPLAY','XAUTHORITY','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','LANG','LC_ALL','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP','SystemRoot','WINDIR','HOMEDRIVE','HOMEPATH','ComSpec','PATHEXT'];");
+put('agent/agent.js', agent);
+
+// The gateway and VPS agent initially talk only over localhost. We do not
+// send device secrets to an old public bridge at the same hostname.
+let linux = get('deploy/install-linux.sh');
+linux = exact(linux, 'npm install --omit=dev --silent',
+  'npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent');
+const initLine = linux.split('\n').find(x => x.includes('node agent/agent.js init --gateway'));
+if (!initLine) throw new Error('Cannot find Linux agent init');
+linux = exact(linux, initLine,
+  initLine.replace(/--gateway "[^"]+"/, '--gateway "ws://127.0.0.1:8766/device"'));
+linux = exact(linux, 'mkdir -p ~/.config/systemd/user',
+  'BACKEND_ROOT="$HOME/.local/share/vortex-commander/backend"\n' +
+  'npm install --prefix "$BACKEND_ROOT" --ignore-scripts --no-audit --no-fund --save-exact @wonderwhy-er/desktop-commander@0.3.3\n' +
+  'npm pkg set --prefix "$BACKEND_ROOT" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1\n' +
+  'npm install --prefix "$BACKEND_ROOT" --ignore-scripts --no-audit --no-fund\n' +
+  'node agent/configure-backend.mjs\n' +
+  'mkdir -p ~/.config/systemd/user');
+linux = exact(linux, 'for u in gateway agent; do',
+  'NODE_BIN="$(command -v node)"\nfor u in gateway agent; do');
+linux = exact(linux, 'sed -e "s#@BIND_HOST@#$BIND_HOST#g"',
+  'sed -e "s#@NODE_BIN@#$NODE_BIN#g" -e "s#@BIND_HOST@#$BIND_HOST#g"');
+put('deploy/install-linux.sh', linux);
+// Isolate the VORTEX gateway on 127.0.0.1:8766, never claim port 8765.
+const gatewayUnit = 'deploy/remote-mcp-gateway.service.in';
+put(gatewayUnit, exact(get(gatewayUnit), '--port 8765', '--port 8766'));
+for (const name of ['agent', 'gateway']) {
+  const rel = 'deploy/remote-mcp-' + name + '.service.in';
+  put(rel, exact(get(rel), '/usr/bin/node', '@NODE_BIN@'));
+}
+fs.copyFileSync(path.join(kitDir, 'configure-backend.mjs'),
+  path.join(root, 'agent', 'configure-backend.mjs'));
+
+
+/* Performance overlay: read-only batched checks; opt-in metadata-only traces.
+   Applied to the fixed upstream version; fail closed on changed anchors. */
+let gatewayPerf = get('gateway/server.js');
+gatewayPerf = exact(gatewayPerf, "    const { device_id: _target, ...forwardArgs } = args; // device_id is ours, not the backend's", "    if (tool === 'quick_checks') {\n      // Reject the entire request before executing any subcall if it is malformed.\n      if (!args || typeof args !== 'object' || Array.isArray(args) ||\n          Object.keys(args).some((k) => !['device_id', 'checks'].includes(k)) ||\n          typeof args.device_id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(args.device_id) ||\n          !Array.isArray(args.checks) || args.checks.length < 1 || args.checks.length > 4)\n        throw new RelayError('INVALID_ARGUMENT', 'An explicit device_id and 1-4 checks are required');\n      const commands = { whoami: 'whoami', pwd: 'pwd', uptime: 'uptime' };\n      const entries = args.checks.map((check) => {\n        if (!check || typeof check !== 'object' || Array.isArray(check))\n          throw new RelayError('INVALID_ARGUMENT', 'Each check must be an object');\n        const type = check.type;\n        if (type === 'get_file_info' || type === 'list_directory') {\n          if (Object.keys(check).some((k) => !['type', 'path'].includes(k)) ||\n              typeof check.path !== 'string' || check.path.length < 1 || check.path.length > 768 ||\n              check.path.includes('\\0'))\n            throw new RelayError('INVALID_ARGUMENT', 'A file check needs a valid path');\n          return { type, args: { path: check.path } };\n        }\n        if (!Object.hasOwn(commands, type) || Object.keys(check).some((k) => k !== 'type'))\n          throw new RelayError('INVALID_ARGUMENT', 'Only fixed read-only command checks are supported');\n        return { type, args: { command: commands[type], timeout_ms: 10000 } };\n      });\n      deviceId = args.device_id;\n      if (!devices.has(deviceId)) throw new RelayError('DEVICE_OFFLINE', 'Target device is not online');\n      // Some stdio-backed terminals interleave output when started simultaneously.\n      // Keep fixed command checks sequential while unrelated file metadata checks run concurrently.\n      let commandLane = Promise.resolve();\n      const results = await Promise.all(entries.map(async (item, index) => {\n        const started = Date.now();\n        const name = Object.hasOwn(commands, item.type) ? 'start_process' : item.type;\n        let ok = false, error = null, preview = '';\n        try {\n          // Each subcall passes through the existing agent and all its policy rules.\n          const execute = async () => {\n            const response = await relay(deviceId, 'tools/call',\n              { name, arguments: item.args }, Math.min(cfg.callTimeoutMs, 15000));\n            let followText = '';\n            if (name === 'start_process' && response?.isError !== true) {\n              const initial = (response.content ?? []).filter((c) => c?.type === 'text')\n                .map((c) => String(c.text ?? '')).join('');\n              // Some tiny commands finish before start_process has flushed stdout.\n              if (initial.includes('Initial output:' + String.fromCharCode(10, 10))) {\n                const pid = /Process started with PID ([0-9]+)/.exec(initial)?.[1];\n                if (!pid) throw new RelayError('OUTPUT_UNAVAILABLE', 'Process output could not be verified');\n                const follow = await relay(deviceId, 'tools/call',\n                  { name: 'read_process_output', arguments: { pid: Number(pid), timeout_ms: 2500, offset: 0 } },\n                  Math.min(cfg.callTimeoutMs, 6000));\n                if (follow?.isError === true) throw new RelayError('OUTPUT_UNAVAILABLE', 'Process output unavailable');\n                followText = (follow.content ?? []).filter((c) => c?.type === 'text')\n                  .map((c) => String(c.text ?? '')).join('');\n                if (!followText.trim()) throw new RelayError('OUTPUT_UNAVAILABLE', 'Process produced no follow-up output');\n              }\n            }\n            return { response, followText };\n          };\n          const { response, followText } = await (name === 'start_process'\n            ? (commandLane = commandLane.then(execute, execute))\n            : execute());\n          ok = response?.isError !== true;\n          if (ok) {\n            const value = (response.content ?? []).filter((c) => c?.type === 'text' && typeof c.text === 'string')\n              .map((c) => c.text).join('\\n');\n            preview = (value + (followText ? String.fromCharCode(10) + 'Follow-up output:' + String.fromCharCode(10) + followText : '')).slice(0, 400);\n          } else error = 'BACKEND_ERROR';\n        } catch (e) {\n          error = typeof e?.code === 'string' ? e.code : 'RELAY_ERROR';\n        } finally {\n          audit({ client_id: client.client_id, device_id: deviceId,\n            tool: 'quick_checks:' + item.type, duration_ms: Date.now() - started,\n            status: ok ? 'success' : 'error', error_code: error });\n        }\n        return { index, type: item.type, ok, elapsed_ms: Date.now() - started,\n          ...(error ? { error } : {}), ...(preview ? { preview } : {}) };\n      }));\n      if (results.some((r) => !r.ok)) { status = 'error'; errCode = 'PARTIAL_CHECK_FAILURE'; }\n      return { content: [{ type: 'text', text: JSON.stringify({ device_id: deviceId, results }) }] };\n    }\n    const { device_id: _target, ...forwardArgs } = args; // device_id is ours, not the backend's");
+gatewayPerf = exact(gatewayPerf, "    dev.pending.set(request_id, { resolve, reject, timer, request_id });", "    dev.pending.set(request_id, { resolve, reject, timer, request_id, started_ms: performance.now() });");
+gatewayPerf = exact(gatewayPerf, "      dev.pending.delete(m.request_id); clearTimeout(p.timer);", "      dev.pending.delete(m.request_id); clearTimeout(p.timer);\n      if (process.env.RMCP_TRACE_LATENCY === '1') {\n        const relayMs = Math.round(performance.now() - p.started_ms);\n        const agentMs = typeof m._vortex_agent_ms === 'number' && Number.isFinite(m._vortex_agent_ms)\n          ? Math.round(m._vortex_agent_ms) : null;\n        const overhead = agentMs === null ? 'n/a' : Math.max(0, relayMs - agentMs);\n        log('INFO', 'vortex_perf device=' + deviceId + ' relay_ms=' + relayMs +\n          ' agent_ms=' + (agentMs ?? 'n/a') + ' transport_overhead_ms=' + overhead);\n      }");
+let agentPerf = get('agent/agent.js');
+agentPerf = exact(agentPerf, "    const reply = (body) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'response', request_id: m.request_id, ...body }));", "    const startedMs = performance.now();\n    const reply = (body) => ws.readyState === 1 && ws.send(JSON.stringify({\n      type: 'response', request_id: m.request_id, ...body,\n      _vortex_agent_ms: Math.round(performance.now() - startedMs)\n    }));");
+put('gateway/server.js', gatewayPerf);
+put('agent/agent.js', agentPerf);
+
+console.log('VORTEX overlay applied: pinned backend, Windows policy/env, VPS localhost relay, dynamic Node path.');

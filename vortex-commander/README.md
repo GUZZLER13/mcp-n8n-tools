@@ -1,0 +1,249 @@
+# VORTEX Commander — SelfHostDesktopMCP
+
+## Projet
+
+Remplacement auto-hébergé de Remote Desktop Commander : une passerelle HTTPS
+avec OAuth sur le VPS Hetzner et des agents Desktop Commander sur cinq appareils.
+Nous conservons les fonctions fichiers, terminal, processus, recherche et
+édition, avec comptes OS non privilégiés.
+
+Sources utilisées :
+- Passerelle : https://github.com/andyching168/SelfHostDesktopMCP
+- Commit fixe : 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+- Moteur : @wonderwhy-er/desktop-commander@0.3.3
+- Branche de travail : vortex-commander-hardening
+
+## État réel
+
+Les scripts et tests sont en cours de validation GitHub. La passerelle et les
+agents NE SONT PAS encore installés par cette conversation sur les appareils.
+L'ancien VPS Bridge reste en place tant que la connexion OAuth et les outils
+d'écriture depuis ChatGPT n'ont pas été vérifiés.
+
+Le quota de Remote Desktop Commander est atteint et le plugin n8n ne répond
+pas : aucun accès shell de remplacement au VPS n'est disponible ici.
+
+## Ordre de déploiement
+
+1. Télécharger ce dossier depuis la branche vortex-commander-hardening.
+2. Exécuter preflight.sh en lecture seule depuis le VPS non-root.
+3. Inspecter prepare.sh, puis préparer la copie du serveur sur le VPS.
+4. Exécuter activate-local.sh uniquement après validation de ses prérequis.
+5. Exécuter verify.sh. Le port 8765 reste sur 127.0.0.1.
+6. Vérifier l'ancien Caddyfile et sauvegarder la configuration avant toute
+   bascule du domaine mcp.guzzler-bot.cloud. Utiliser Caddyfile.example
+   seulement après adaptation aux routes déjà présentes et validation Caddy.
+7. Associer le nouveau serveur MCP dans ChatGPT Web avec OAuth, puis tester
+   l'accès en lecture et en écriture depuis ChatGPT classique.
+8. Appairer NAS, seedbox et PC, puis tester chaque machine.
+9. Désactiver l'ancien VPS Bridge uniquement après tests complets.
+
+## VPS Hetzner, sous le compte normal
+
+Depuis le dossier vortex-commander :
+
+    bash preflight.sh
+    bash prepare.sh
+
+La préparation clone et vérifie une version fixe, applique nos correctifs
+VORTEX et exécute des tests. Aucun serveur n'est démarré à cette étape.
+
+Après revue des résultats (demande une confirmation explicite) :
+
+    VORTEX_CONFIRM_ACTIVATION=OUI bash activate-local.sh
+    bash verify.sh
+
+L'activation crée deux services utilisateur systemd sur la boucle locale.
+Ne PAS exécuter en root, ne PAS changer le firewall, ne PAS publier le port
+8765. L'owner token reste dans un fichier privé sur le VPS.
+
+## NAS et seedbox
+
+Récupérer le même dossier vortex-commander sur l'appareil.
+Utiliser linux-agent.sh en compte non-root et seulement après tests de la
+passerelle. La seedbox avait déjà un agent Remote Desktop Commander en ligne
+sur dsb39911.seedbox.io, mais le nouveau backend et ses droits sont à tester.
+
+    bash linux-agent.sh status
+    bash linux-agent.sh prepare
+    # Après ouverture manuelle de l'appairage côté VPS :
+    bash linux-agent.sh pair nas
+    bash linux-agent.sh run
+
+Sur la seedbox remplacer nas par seedbox-io.
+Ne pas installer de service persistant non autorisé par l'hébergeur.
+Voir seedbox.md.
+
+## PC Windows
+
+Sur chaque PC non administrateur, lire windows.md :
+
+    .\windows-agent.ps1 -Action Status
+    .\windows-agent.ps1 -Action Prepare
+
+Ne pas appairer avant OAuth validé côté VPS.
+
+## Sécurité et limites
+
+- Le serveur reste lié à localhost jusqu'à activation contrôlée de Caddy.
+- Aucun secret ni token ne doit apparaître dans GitHub, les logs ou le chat.
+- Les restrictions de commandes du projet ne sont PAS une sandbox.
+- Aucun accès root ou privilège Administrateur automatique.
+- Docker/Transmission/Plex restent limités aux permissions OS et à celles
+  accordées à chaque agent.
+- Les tests CI ne garantissent pas la compatibilité réelle des cinq appareils.
+- Le plugin MCP de test prouve la communication simple avec ChatGPT, pas encore
+  les autorisations d'écriture et de terminal de notre futur connecteur.
+
+## Supervision des agents Linux : NAS et seedbox
+
+Apres installation, appairage et validation du mode Run, utiliser
+agent-supervisor.sh. Sur les systemes avec systemd utilisateur :
+
+    bash agent-supervisor.sh start systemd
+
+Sur une seedbox ou systemd utilisateur n'est pas autorise, **si tmux est present** :
+
+    bash agent-supervisor.sh start tmux
+
+Le mode tmux ne garantit pas un redemarrage de l'agent apres reboot de la
+seedbox : verifier les options autorisees par l'hebergeur. Chaque mode dispose
+de status et stop, uniquement pour l'agent VORTEX.
+
+## Retour arriere
+
+Sur le VPS, stop-local.sh desactive les nouvelles unites systemd utilisateur
+afin qu'elles ne redemarrent pas automatiquement apres un reboot.
+Il ne restaure PAS a lui seul l'ancienne route Caddy, qui doit etre sauvegardee
+avant une bascule. Ni RACINES, ATLAS, VORTEX ni VPS Bridge ne sont touches.
+
+## Deux couches de restrictions sur les fichiers
+
+Le test de bout en bout a confirmé que **Desktop Commander local applique
+lui-même un ensemble de répertoires autorisés** (par défaut le dossier
+utilisateur). Le filtrage de chemins de SelfHostDesktopMCP ne peut qu'ajouter
+des restrictions ; il ne donne pas accès à un répertoire interdit par le
+moteur Desktop Commander.
+
+Pour le NAS, la seedbox et le VPS, vérifier les répertoires réellement
+nécessaires (ex. un point de montage de stockage) et configurer une
+**autorisation explicite** dans les paramètres locaux de Desktop Commander,
+sans supprimer les protections des clés SSH et des jetons. Ne pas modifier
+l'accès général à tout le système par défaut.
+
+## Dossier de reprise Windows (y compris PC d'Enzo)
+
+Voir [QUAND_DEVANT_PC.md](QUAND_DEVANT_PC.md), le diagnostic Windows
+[preflight-windows.ps1](preflight-windows.ps1) et le
+[plan des cinq appareils](device-plan.json). Aucun secret d'appairage
+n'est stocke dans ces fichiers.
+
+## Corrections ciblées des dépendances
+
+Le moteur Desktop Commander 0.3.3 utilise certaines versions de dépendances
+signalées par npm audit. Nos scripts appliquent des overrides à la racine de
+notre installation : `node-forge=1.4.3` et `exceljs > uuid=11.1.1`.
+Les tests CI doivent prouver leur compatibilité avant tout déploiement.
+
+L'alerte `zod` reste à examiner : son correctif impose un changement majeur
+(3 vers 4) et ne doit pas être forcé sans revue. Les alertes restantes ne
+sont pas masquées : nous conservons l'audit npm visible dans GitHub Actions.
+**Le déploiement public reste interdit tant que la sécurité n'est pas validée.**
+
+## Vérifications avant raccordement ChatGPT
+
+Exécuter bash verify.sh sur le VPS pour confirmer que la nouvelle passerelle
+répond uniquement sur localhost avec ses métadonnées OAuth. Après la bascule
+contrôlée de Caddy, bash verify-public.sh vérifie HTTPS, OAuth, le refus de
+requêtes MCP anonymes et l'inaccessibilité publique de l'administration.
+
+Les tests restent distincts de la connexion réelle de ChatGPT Plus.
+
+## Conservation de la connexion OAuth
+
+La passerelle SelfHostDesktopMCP émet déjà des jetons de renouvellement avec
+rotation. Notre adaptation annonce désormais explicitement le scope
+`offline_access` dans les métadonnées OAuth, afin de faciliter une connexion
+ChatGPT persistante, conformément aux indications de la documentation
+OpenAI. Le test automatique couvre la découverte, PKCE, l'écriture réelle
+via OAuth, le renouvellement et l'invalidation de l'ancien jeton.
+
+**Cela n'accorde pas à ChatGPT Plus de droits MCP que son abonnement
+n'autoriserait pas** : il faudra vérifier la disponibilité des outils
+d'écriture dans le compte réel avant toute migration.
+
+
+## Déploiement parallèle — VPS Hetzner (16 novembre 2026)
+
+Contrôles SSH du compte `stef` : Node.js `22.23.3`, Caddy et systemctl
+présents. Le port `127.0.0.1:8765` est déjà occupé par un processus Python
+(PID 3113406 lors du diagnostic ; répertoire de travail `/app`). Le port
+`8766` est libre. Le statut `systemctl --user is-system-running` était
+`degraded` : identifier les unités en échec avant activation.
+
+Notre passerelle utilise désormais `127.0.0.1:8766` dans l'unité systemd,
+la connexion de l'agent VPS et le contrôle local. Ne pas arrêter le
+processus Python ni modifier Caddy avant une validation locale et un
+plan de retour arrière.
+
+## Mode d'administration etendue (VPS, a activer explicitement)
+
+Le profil optionnel `policy-vps-admin-user.json` autorise les outils MCP
+usuels a manipuler **tous les fichiers et processus auxquels le compte OS
+`stef` a deja acces**, notamment les volumes montes et les commandes
+`systemctl --user`, `git` et de maintenance normale. Le profil ne fixe
+aucune liste de repertoires autorises (`allowed_paths: []`).
+
+Il conserve en revanche la protection des dossiers de secrets et de la
+configuration du nouveau MCP ; il refuse l'escalade directe
+(`sudo` / `su` / `doas`), les commandes de destruction catastrophique
+et la modification distante des restrictions de Desktop Commander.
+**Ce profil n'accorde pas root et n'est pas un bac a sable : un interpreteur
+de commandes peut contourner des controles textuels.**
+
+Pour l'installer sur le VPS **avant la premiere activation** :
+
+    git -C ~/vortex-commander-kit pull --ff-only
+    bash ~/vortex-commander-kit/vortex-commander/install-vps-user-policy.sh
+
+L'installateur ecrit aussi les parametres de Desktop Commander
+(`allowedDirectories: []`, commandes ordinaires permises par le compte
+`stef`, `telemetryEnabled: false`) **seulement si sa configuration
+n'existe pas deja**. Si elle existe, il ne l'ecrase pas et demande un
+controle manuel des limites. Ainsi, les deux niveaux de permissions
+correspondent au profil d'administration etendue.
+
+L'installateur ne remplace pas une politique existante et ne lance pas
+l'agent. Pour des droits root ou Docker supplementaires, decider
+explicitement de commandes et ressources bien definies ; ne pas donner
+`NOPASSWD: ALL`, `chmod 777` ni monter le socket Docker dans un agent
+ChatGPT public. L'activation HTTPS/OAuth doit etre validee avant tout
+controle distant. Le profil n'est pas copie automatiquement sur la seedbox,
+le NAS ou les PC Windows.
+
+## Usage dans ChatGPT : limitation de forfait (verification 16/11/2026)
+
+Le serveur MCP est fonctionnel et publiquement joignable en HTTPS, mais cela
+ne suffit pas a rendre ses outils accessibles a une conversation ChatGPT.
+D'apres l'aide officielle OpenAI, l'ajout de **serveurs MCP personnalises**
+et le MCP complet (y compris les actions en ecriture) requierent actuellement
+un espace ChatGPT **Business, Enterprise ou Edu** et les autorisations
+correspondantes. **ChatGPT Plus ne donne pas acces a cet ajout** ; Pro est
+limite aux permissions de lecture/fetch. Un serveur pret et un owner token
+ne contournent pas cette limitation. Documentation :
+https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt
+
+Le controle en direct sur le VPS peut se faire sans changer d'abonnement :
+depuis la session SSH autorisee, lancer apres mise a jour du kit :
+
+    node "$HOME/vortex-commander-kit/vortex-commander/verify-agent-live.mjs"
+
+Ce controle lit le token administrateur **uniquement localement**, ouvre une
+session MCP sur 127.0.0.1:8766, verifie l'agent et lance un outil de
+consultation d'un fichier du kit. Il ne divulgue ni jeton ni contenu de fichier,
+ne modifie pas les projets et ferme sa session a la fin. Ne pas copier le
+contenu du token dans ChatGPT ou GitHub.
+
+Pour la gestion distante via les outils ChatGPT disponibles sans MCP personnalise,
+continuer avec GitHub (commits/PR et tests), et envisager une integration
+specifiquement approuvee plutot qu'une exposition anonyme du shell.

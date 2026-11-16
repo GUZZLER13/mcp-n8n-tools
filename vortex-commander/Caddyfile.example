@@ -1,0 +1,13 @@
+# A adapter apres lecture du Caddyfile actif. NE PAS dupliquer mcp.guzzler-bot.cloud.
+# Faire une sauvegarde et caddy validate avant reload. /admin reste prive.
+mcp.guzzler-bot.cloud {
+    @vortex path /health /mcp /device /.well-known/* /authorize /token /register /pair/*
+    handle @vortex {
+        reverse_proxy 127.0.0.1:8766 {
+            flush_interval -1
+        }
+    }
+    handle {
+        respond 404
+    }
+}
