@@ -53,6 +53,64 @@ Ces catégories mélangent des travaux de durées différentes et les échantill
 
 Le banc local exclut le temps de raisonnement de ChatGPT, la latence de l'interface, les liens Internet publics et les travaux GitHub Actions. Il ne faut pas interpréter ces temps comme la durée complète d'une réponse ChatGPT.
 
+## Optimisation du relais ajoutée à la PR n° 2 (non déployée)
+
+L'adaptation de la version **épinglée** de SelfHostDesktopMCP (`patch-upstream.mjs`)
+expose un outil supplémentaire, `quick_checks`. Il réduit les allers-retours HTTP
+pour **1 à 4 contrôles indépendants** (sans ajouter de serveur ni processus
+permanent). Exemple pour notre VPS :
+
+```json
+{
+  "name": "quick_checks",
+  "arguments": {
+    "device_id": "vps-hetzner",
+    "checks": [
+      { "type": "pwd" },
+      { "type": "uptime" },
+      { "type": "get_file_info", "path": "/home/stef/vortex-commander-kit/vortex-commander/README.md" }
+    ]
+  }
+}
+```
+
+Les seuls types acceptés sont `get_file_info`, `list_directory`, `whoami`,
+`pwd` et `uptime`. Les trois derniers utilisent des commandes fixes, **jamais
+un texte fourni par le client**. Aucun outil d'écriture n'est admissible. Toute
+la liste est validée avant la première exécution ; les opérations sont ensuite
+lancées en parallèle et **chacune traverse la politique habituelle de l'agent**,
+avec sa propre entrée d'audit. Le récapitulatif final contient les statuts,
+durées et **400 caractères maximum de résultat par vérification**, sans
+transmettre de fichiers complets. Une vérification bloquée reste bloquée.
+
+Cette optimisation réduit le nombre d'appels entre ChatGPT et la passerelle,
+mais ne garantit pas que quatre opérations coûteuses sur le VPS se terminent
+plus vite qu'une seule opération. Préférer un outil direct lorsqu'une seule
+opération suffit ; `read_multiple_files` reste mieux adapté à plusieurs
+lectures de fichiers.
+
+### Chronométrage séparé, sans données sensibles
+
+La passerelle reçoit désormais une durée de traitement calculée par l'agent.
+Lorsque la variable d'environnement **`RMCP_TRACE_LATENCY=1`** est définie
+sur la passerelle, ses journaux incluent uniquement :
+- `relay_ms` : délai aller-retour passerelle → agent → passerelle ;
+- `agent_ms` : politique de sécurité, traitement et attente du moteur local ;
+- `transport_overhead_ms` : différence approximative des deux.
+
+Aucun argument, contenu de fichier, sortie de commande ou jeton n'est enregistré
+par ce traçage. Celui-ci est désactivé par défaut. Les durées de
+`start_process` **incluent encore l'exécution de la commande** : elles ne
+séparent pas le temps propre du shell de celui du moteur Desktop Commander.
+Les différences d'horloge et d'arrondi rendent la dernière métrique indicative.
+
+**Validation prévue :** les tests GitHub de la PR appliquent l'overlay sur
+le commit épinglé, vérifient la syntaxe, exécutent les tests amont et un test
+réel passerelle → agent. Ce test contrôle aussi les requêtes mal formées,
+les commandes arbitraires interdites et les chemins sensibles refusés.
+Aucun changement de production ou de configuration n'est automatique.
+
+
 ## Optimisations à appliquer dans l'ordre des mesures
 
 - **Éviter les appels redondants** : choisir `device_id` directement, utiliser la liste d'outils conservée pendant la session et ne pas redécouvrir systématiquement les schémas inchangés.
