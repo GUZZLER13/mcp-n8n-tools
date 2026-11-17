@@ -82,12 +82,18 @@ browserBackends = exact(browserBackends,
   "  const manifest = path.join(backendRoot, 'package.json');\n" +
   "  const cli = path.join(backendRoot, 'out', 'Default', 'gen', 'src', 'bin', 'chrome-devtools-mcp.js');\n" +
   "  if (!fs.existsSync(manifest) || !fs.existsSync(cli) || JSON.parse(fs.readFileSync(manifest, 'utf8')).version !== '1.13.0') throw new Error('Pinned Chrome DevTools 1.13.0 must be preinstalled for browser-only agent');\n" +
-  "  // Reject executable/package trees writable by the unprivileged browser account.\n" +
-  "  for (const localFile of [trustedRoot, backendRoot, manifest, cli, process.execPath]) {\n" +
-  "    const stat = fs.lstatSync(localFile);\n" +
-  "    if (stat.isSymbolicLink() || stat.uid !== 0 || (stat.mode & 0o022)) throw new Error('Browser runtime must be root-owned and not group/world-writable');\n" +
-  "  }\n" +
-
+  "  // Check every path component, including node_modules and binary parents, before execution.\n" +
+  "  const assertRootOwned = (candidate) => {\n" +
+  "    let current = path.resolve(candidate);\n" +
+  "    while (true) {\n" +
+  "      const stat = fs.lstatSync(current);\n" +
+  "      if (stat.isSymbolicLink() || stat.uid !== 0 || (stat.mode & 0o022)) throw new Error('Browser runtime must be root-owned and not group/world-writable');\n" +
+  "      const parent = path.dirname(current);\n" +
+  "      if (parent === current) break;\n" +
+  "      current = parent;\n" +
+  "    }\n" +
+  "  };\n" +
+  "  for (const localFile of [trustedRoot, backendRoot, manifest, cli, process.execPath]) assertRootOwned(localFile);\n" +
   "  return { name, command: [process.execPath, cli, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };\n" +
   "}\n" +
 
