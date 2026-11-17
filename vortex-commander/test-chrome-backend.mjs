@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -59,22 +60,15 @@ test('existing device policy denies direct access to saved browser cookies', () 
   assert.equal(check(policy, 'read_file', { path: path.join(os.homedir(), 'note.txt') }), null);
 });
 
-test('RACINES backend uses only a fixed local MCP reader process without a browser session', () => {
+test('RACINES cannot start through the general-purpose VORTEX agent', () => {
   const config = { template: 'racines', name: 'racines', params: {} };
-  if (process.platform !== 'linux') {
-    assert.throws(() => resolveBackend(config, {}), /Linux service host/);
-    return;
-  }
-  const backend = resolveBackend(config, {});
-  assert.equal(backend.name, 'racines');
-  assert.equal(backend.prefix, 'racines_');
-  assert.deepEqual(backend.defaultDisabled, []);
-  assert.equal(backend.command[0], process.execPath);
-  assert.match(backend.command[1], /racines-mcp\.mjs$/);
-  assert.equal(backend.command.length, 2);
-  assert.ok(!backend.command.some(x => /Bearer|password|token|api[_-]?key/i.test(x)));
-  assert.throws(
-    () => resolveBackend({ template: 'racines', params: { command: '/bin/sh' } }, {}),
-    /invalid RACINES options/
-  );
+  assert.throws(() => resolveBackend(config, {}),
+    /RACINES backend requires (a Linux service host|dedicated isolated reader)/);
+  // These contracts are applied to the actual pinned upstream agent by the
+  // overlay. They prevent any shell, file or browser backend in reader-only mode.
+  const agent = fs.readFileSync(path.join(root, 'agent.js'), 'utf8');
+  assert.match(agent, /if \(!RACINES_READER_ONLY\) await startBuiltin\(\);/);
+  assert.match(agent, /if \(RACINES_READER_ONLY\) desired = desired\.filter\(/);
+  assert.match(agent, /os\.userInfo\(\)\.username !== 'vortex-racines'/);
+  assert.match(agent, /process\.getuid\?\.\(\) === 0/);
 });
