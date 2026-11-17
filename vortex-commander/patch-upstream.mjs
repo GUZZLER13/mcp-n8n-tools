@@ -42,18 +42,19 @@ oauthSource = exact(oauthSource,
   "refresh_token: refresh, scope: 'mcp offline_access'");
 put('gateway/oauth.js', oauthSource);
 
-// Browser automation is built into the existing MCP gateway. Keep temporary
-// Playwright sessions by default; opt in to Playwright's own persistent
-// profile when the operator has secured that device and its browser data.
-// Do not expose an arbitrary user-data-dir parameter through the console.
+// Chrome DevTools is the single browser backend for guided archive research.
+// Keep ephemeral browser profiles as the default; a dedicated persistent
+// Chrome profile is an explicit opt-in to preserve authenticated sessions.
+// No arbitrary user-data-dir or unsafe Chrome flags are exposed in the console.
 let browserBackends = get('agent/backends.js');
 browserBackends = exact(browserBackends,
-  "params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],",
+  "params: [\n      { key: 'autoConnect', label: 'Use my running Chrome (--autoConnect): your real profile and logged-in sessions', type: 'boolean', default: false },\n      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n    ],\n    // --autoConnect attaches to an existing browser, so it replaces --isolated/--headless (which only apply to a browser it launches itself)\n    args: (p) => (p.autoConnect ? ['--autoConnect'] : ['--isolated', ...(p.headless ? ['--headless'] : [])]),",
   "params: [\n" +
-  "      { key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false },\n" +
-  "      { key: 'persistent', label: 'Keep a dedicated Playwright session on this device (opt-in)', type: 'boolean', default: false },\n" +
+  "      { key: 'autoConnect', label: 'Connect to an existing Chrome session (exposes browser cookies and accounts)', type: 'boolean', default: false },\n" +
+  "      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n" +
+  "      { key: 'persistent', label: 'Keep dedicated Chrome DevTools session on this device (opt-in)', type: 'boolean', default: false },\n" +
   "    ],\n" +
-  "    args: (p) => [...(p.persistent ? [] : ['--isolated']), ...(p.headless ? ['--headless'] : [])],");
+  "    args: (p) => p.autoConnect ? ['--autoConnect'] : [...(p.persistent ? [] : ['--isolated']), ...(p.headless ? ['--headless'] : [])],");
 put('agent/backends.js', browserBackends);
 
 let agent = get('agent/agent.js');
