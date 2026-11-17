@@ -17,6 +17,21 @@ test('staging shell script parses', () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
+test('trusted Node source is checked before it is executed', () => {
+  const start = source.indexOf('check_host() {');
+  const end = source.indexOf('\ncheck_receipt() {', start);
+  const check = source.slice(start, end);
+  const owner = check.indexOf('stat -c %u "$component"');
+  const permissions = check.indexOf('find "$component" -maxdepth 0 -perm /022');
+  const fingerprint = check.indexOf('sha256sum "$SOURCE_NODE"');
+  const execution = check.indexOf('"$SOURCE_NODE" --version');
+  assert.ok(owner > 0 && permissions > owner);
+  assert.ok(fingerprint > permissions && execution > fingerprint,
+    'do not execute an unverified Node binary as the NAS operator');
+  assert.match(check, /\[ ! -L "\$component" \]/);
+  assert.match(check, /\[ -f "\$SOURCE_NODE" \] && \[ -x "\$SOURCE_NODE" \]/);
+});
+
 test('check-only path precedes all mutations and reports no gateway changes', () => {
   assert.ok(source.indexOf('  --check)') > 0);
   assert.ok(source.indexOf('  --apply)') > source.indexOf('  --check)'));
