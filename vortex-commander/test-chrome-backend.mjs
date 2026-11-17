@@ -114,12 +114,23 @@ test('browser-only fast path requires preinstalled pinned Chrome and avoids npx 
         return stat.uid === 0 && !stat.isSymbolicLink() && !(stat.mode & 0o022);
       });
     const ready = trusted;
-    if (ready) {
-      const cmd = resolveBackend(spec({ headless: true }), {}).command;
+    const configured = spec({ headless: true, debianChromium: true, persistent: false });
+    const chromiumInstalled = process.platform === 'linux' && fs.existsSync('/usr/bin/chromium');
+    if (ready && chromiumInstalled) {
+      const cmd = resolveBackend(configured, {}).command;
       assert.deepEqual(cmd.slice(0, 2), [process.execPath, cli]);
+      assert.ok(cmd.includes('--headless'));
+      assert.ok(cmd.includes('--isolated'));
+      assert.ok(cmd.includes('--executablePath=/usr/bin/chromium'));
       assert.ok(!cmd.includes('npx'));
     } else {
-      assert.throws(() => resolveBackend(spec(), {}), /Pinned Chrome DevTools 1.13.0 must be preinstalled|Browser runtime must be root-owned/);
+      assert.throws(() => resolveBackend(configured, {}), /Debian Chromium requires installed|Pinned Chrome DevTools 1.13.0 must be preinstalled|Browser runtime must be root-owned/);
+    }
+    assert.throws(() => resolveBackend(spec(), {}), /NAS browser agent requires headless isolated Debian Chromium/);
+    assert.throws(() => resolveBackend(spec({headless: true}), {}), /NAS browser agent requires headless isolated Debian Chromium/);
+    assert.throws(() => resolveBackend(spec({headless: true, debianChromium: true, persistent: true}), {}), /NAS browser agent requires headless isolated Debian Chromium|Debian Chromium requires installed/);
+    if (chromiumInstalled) {
+      assert.throws(() => resolveBackend(spec({headless: true, debianChromium: true, browserUrl: 'http://127.0.0.1:9222'}), {}), /Unsupported isolated NAS browser options/);
     }
   } finally {
     if (old === undefined) delete process.env.VORTEX_BROWSER_ONLY;
