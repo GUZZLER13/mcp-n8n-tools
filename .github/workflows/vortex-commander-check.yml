@@ -38,6 +38,7 @@ jobs:
           node --test vortex-commander/test-preserve-existing-dc.mjs
           node --test vortex-commander/test-nas-browser-stage.mjs
           node --test vortex-commander/test-browser-agent-archive.mjs
+          node --test vortex-commander/test-browser-session.mjs
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck -S error vortex-commander/*.sh
           fi
