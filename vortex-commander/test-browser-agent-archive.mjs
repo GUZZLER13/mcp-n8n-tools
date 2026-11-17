@@ -16,7 +16,8 @@ const testArchive = (extraFiles = [], extraEntries = []) => {
   }
   for (const name of [
     'agent/agent.js', 'agent/backends.js', 'agent/policy.js',
-    'agent/browser-session.mjs', 'agent/browser-agent-session.mjs', 'package.json',
+    'agent/browser-session.mjs', 'agent/browser-agent-session.mjs',
+    'agent/private-browser-profile.mjs', 'package.json',
     'package-lock.json', 'node_modules/ws/index.js',
     'node_modules/@modelcontextprotocol/sdk/index.js',
   ]) {

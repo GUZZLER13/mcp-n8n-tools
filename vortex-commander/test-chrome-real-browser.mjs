@@ -3,10 +3,60 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+test('dedicated browser profile retains a fixture cookie across real Chrome restarts',
+  { timeout: 120000 }, async t => {
+    const profile = mkdtempSync(path.join(tmpdir(), 'vortex-chrome-profile-'));
+    let cookieReceived = false;
+    const server = createServer((req, res) => {
+      if (req.url === '/check') cookieReceived = (req.headers.cookie || '').includes('vortex_fixture=present');
+      res.writeHead(200, {
+        'content-type': 'text/html',
+        'set-cookie': 'vortex_fixture=present; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax'
+      });
+      res.end('<title>VORTEX profile fixture</title>');
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => {
+      server.closeAllConnections();
+      server.close();
+      rmSync(profile, { recursive: true, force: true });
+    });
+    const cli = path.join(process.env.VORTEX_BROWSER_STAGED_PACKAGE,
+      'out', 'Default', 'gen', 'src', 'bin', 'chrome-devtools-mcp.js');
+    for (const route of ['/set', '/check']) {
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [cli, '--headless', '--user-data-dir=' + profile,
+          '--executablePath=' + process.env.VORTEX_TEST_CHROME_BIN,
+          '--no-javascript-evaluation', '--no-file-navigations',
+          '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux'],
+        stderr: 'pipe'
+      });
+      const client = new Client({ name: 'vortex-profile-ci', version: '1.0.0' }, { capabilities: {} });
+      try {
+        await client.connect(transport);
+        const pages = await client.callTool({ name: 'list_pages', arguments: {} });
+        const text = (pages.content || []).map(item => item.text || '').join('\n');
+        const page = text.match(/(?:^|\n)\s*(\d+):\s+/);
+        assert.ok(page, 'Chrome must provide a page ID');
+        const result = await client.callTool({ name: 'navigate_page', arguments: {
+          pageId: Number(page[1]),
+          url: 'http://127.0.0.1:' + server.address().port + route
+        } });
+        assert.notEqual(result.isError, true);
+      } finally {
+        await client.close();
+        await transport.close();
+      }
+    }
+    assert.ok(cookieReceived, 'Cookie from the first browser must survive the restart');
+  });
 
 test('pinned Chrome MCP starts, navigates a local page and closes cleanly', { timeout: 120000 }, async t => {
   const staged = process.env.VORTEX_BROWSER_STAGED_PACKAGE;

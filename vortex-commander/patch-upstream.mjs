@@ -77,7 +77,8 @@ browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
   "if (template === 'chrome-devtools' && p.debianChromium === true && (process.platform !== 'linux' || !fs.existsSync('/usr/bin/chromium'))) throw new Error('Debian Chromium requires installed /usr/bin/chromium on Linux');\n  " +
   "if (template === 'chrome-devtools' && process.env.VORTEX_BROWSER_ONLY === 'true') {\n" +
-  "  if (p.debianChromium !== true || p.headless !== true || p.persistent === true) throw new Error('NAS browser agent requires headless isolated Debian Chromium');\n" +
+  "  if (p.debianChromium !== true || p.headless !== true) throw new Error('NAS browser agent requires headless isolated Debian Chromium');\n" +
+  "  if (p.persistent === true && process.env.VORTEX_BROWSER_PERSISTENT !== 'true') throw new Error('Persistent NAS profile requires local opt-in');\n" +
   "  if (Object.keys(params).some(k => !['debianChromium', 'headless', 'persistent'].includes(k))) throw new Error('Unsupported isolated NAS browser options');\n" +
   "  const trustedRoot = '/opt/vortex-browser-mcp';\n" +
   "  const backendRoot = path.join(trustedRoot, 'node_modules', 'chrome-devtools-mcp');\n" +
@@ -96,6 +97,7 @@ browserBackends = exact(browserBackends,
   "    }\n" +
   "  };\n" +
   "  for (const localFile of [trustedRoot, backendRoot, manifest, cli, process.execPath]) assertRootOwned(localFile);\n" +
+  "  if (p.persistent === true) privateBrowserProfile();\n" +
   "  return { name, command: [process.execPath, cli, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };\n" +
   "}\n" +
 
@@ -104,7 +106,7 @@ browserBackends = exact(browserBackends,
 browserBackends = exact(
   browserBackends,
   "import os from 'node:os';",
-  "import os from 'node:os';\nimport fs from 'node:fs';\nimport { fileURLToPath } from 'node:url';"
+  "import os from 'node:os';\nimport fs from 'node:fs';\nimport { fileURLToPath } from 'node:url';\nimport { privateBrowserProfile } from './private-browser-profile.mjs';"
 );
 browserBackends = exact(
   browserBackends,
@@ -151,7 +153,7 @@ put('test/backends.test.js', browserTests);
 let agent = get('agent/agent.js');
 agent = exact(agent, "import fs from 'node:fs';",
   "import fs from 'node:fs';\nimport { createBrowserAgentSession, browserSessionTools } from './browser-agent-session.mjs';");
-for (const name of ['browser-session.mjs', 'browser-agent-session.mjs']) {
+for (const name of ['browser-session.mjs', 'browser-agent-session.mjs', 'private-browser-profile.mjs']) {
   put('agent/' + name, fs.readFileSync(path.join(kitDir, name), 'utf8'));
 }
 // Reader-only mode is for a different, non-root OS identity and a separate

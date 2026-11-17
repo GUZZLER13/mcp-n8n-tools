@@ -131,7 +131,7 @@ test('browser-only fast path requires preinstalled pinned Chrome and avoids npx 
     }
     assert.throws(() => resolveBackend(spec(), {}), /NAS browser agent requires headless isolated Debian Chromium/);
     assert.throws(() => resolveBackend(spec({headless: true}), {}), /NAS browser agent requires headless isolated Debian Chromium/);
-    assert.throws(() => resolveBackend(spec({headless: true, debianChromium: true, persistent: true}), {}), /NAS browser agent requires headless isolated Debian Chromium|Debian Chromium requires installed/);
+    assert.throws(() => resolveBackend(spec({headless: true, debianChromium: true, persistent: true}), {}), /Persistent NAS profile requires local opt-in|Debian Chromium requires installed/);
     if (chromiumInstalled) {
       assert.throws(() => resolveBackend(spec({headless: true, debianChromium: true, browserUrl: 'http://127.0.0.1:9222'}), {}), /Unsupported isolated NAS browser options/);
     }

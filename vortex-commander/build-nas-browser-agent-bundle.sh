@@ -12,7 +12,7 @@ archive=$2
 [ -d "$source_dir/.git" ] || fail 'Input must be a pinned upstream Git checkout'
 pin=0d67f39aef13ce8253e9a2b7a376e9799a465d22
 [ "$(git -C "$source_dir" rev-parse HEAD)" = "$pin" ] || fail 'Upstream commit is not pinned'
-for file in agent/agent.js agent/backends.js agent/policy.js agent/browser-session.mjs agent/browser-agent-session.mjs package.json package-lock.json; do
+for file in agent/agent.js agent/backends.js agent/policy.js agent/browser-session.mjs agent/browser-agent-session.mjs agent/private-browser-profile.mjs package.json package-lock.json; do
   [ -f "$source_dir/$file" ] && [ ! -L "$source_dir/$file" ] || fail "Missing or symlinked $file"
 done
 grep -Fq 'VORTEX_BROWSER_ONLY' "$source_dir/agent/agent.js" ||
@@ -25,7 +25,7 @@ umask 077
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/agent"
-for file in agent/agent.js agent/backends.js agent/policy.js agent/browser-session.mjs agent/browser-agent-session.mjs package.json package-lock.json; do
+for file in agent/agent.js agent/backends.js agent/policy.js agent/browser-session.mjs agent/browser-agent-session.mjs agent/private-browser-profile.mjs package.json package-lock.json; do
   install -m 0644 "$source_dir/$file" "$work/$file"
 done
 node --check "$work/agent/agent.js"

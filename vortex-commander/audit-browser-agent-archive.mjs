@@ -41,7 +41,7 @@ for (let i = 0; i < names.length; i++) {
       name.split('/').some(component => component === '.' || component === '..') ||
       name.includes('//'))
     fail('ENTRY_PATH');
-  if (!/^(?:agent\/(?:agent\.js|backends\.js|policy\.js|browser-session\.mjs|browser-agent-session\.mjs)?$|node_modules\/|package\.json$|package-lock\.json$)/.test(name))
+  if (!/^(?:agent\/(?:agent\.js|backends\.js|policy\.js|browser-session\.mjs|browser-agent-session\.mjs|private-browser-profile\.mjs)?$|node_modules\/|package\.json$|package-lock\.json$)/.test(name))
     fail('UNEXPECTED_ENTRY');
   if (seen.has(name)) fail('DUPLICATE_ENTRY');
   seen.add(name);
@@ -53,6 +53,7 @@ for (let i = 0; i < names.length; i++) {
 for (const required of [
   'agent/agent.js', 'agent/backends.js', 'agent/policy.js',
   'agent/browser-session.mjs', 'agent/browser-agent-session.mjs',
+  'agent/private-browser-profile.mjs',
   'package.json', 'package-lock.json', 'node_modules/ws/',
   'node_modules/@modelcontextprotocol/sdk/',
 ]) {
