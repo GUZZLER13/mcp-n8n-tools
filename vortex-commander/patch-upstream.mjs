@@ -61,8 +61,10 @@ browserBackends = exact(browserBackends,
   "params: [\n" +
   "      { key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false },\n" +
   "      { key: 'persistent', label: 'Keep dedicated Chrome DevTools session on this device (opt-in)', type: 'boolean', default: false },\n" +
+  "      { key: 'debianChromium', label: 'Use system Debian Chromium (Linux only)', type: 'boolean', default: false },\n" +
   "    ],\n" +
   "    args: (p) => [\n" +
+  "      ...(p.debianChromium === true ? ['--executablePath=/usr/bin/chromium'] : []),\n" +
   "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
   "      ...(p.headless ? ['--headless'] : []),\n" +
   "      '--no-javascript-evaluation', '--redact-network-headers',\n" +
@@ -73,6 +75,7 @@ browserBackends = exact(browserBackends,
   "");
 browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
+  "if (template === 'chrome-devtools' && p.debianChromium === true && (process.platform !== 'linux' || !fs.existsSync('/usr/bin/chromium'))) throw new Error('Debian Chromium requires installed /usr/bin/chromium on Linux');\n  " +
   "return { name, command: ['npx', '-y', 'chrome-devtools-mcp@1.13.0', ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };");
 // Fixed RACINES reader backend: no arbitrary commands, no user-managed token.
 browserBackends = exact(
@@ -126,8 +129,12 @@ let agent = get('agent/agent.js');
 // Reader-only mode is for a different, non-root OS identity and a separate
 // paired VORTEX device. Never run Desktop Commander or Chrome in this mode.
 agent = exact(agent,
+  "if (VORTEX_BROWSER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-browser')) {\n" +
+  "  throw Error('VORTEX browser mode requires dedicated unprivileged vortex-browser account');\n" +
+  "}\n" +
   "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));",
   "const RACINES_READER_ONLY = process.env.VORTEX_RACINES_READER_ONLY === 'true';\n" +
+  "const VORTEX_BROWSER_ONLY = process.env.VORTEX_BROWSER_ONLY === 'true';\n" +
   "if (RACINES_READER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines')) {\n" +
   "  throw Error('RACINES reader requires a dedicated unprivileged vortex-racines account');\n" +
   "}\n" +
@@ -135,9 +142,9 @@ agent = exact(agent,
 );
 agent = exact(agent,
   'async function reconcile(desired) {',
-  'async function reconcile(desired) {\n  if (RACINES_READER_ONLY) desired = desired.filter(d => d?.name === "racines" && d?.template === "racines");'
+  'async function reconcile(desired) {\n  if (RACINES_READER_ONLY) desired = desired.filter(d => d?.name === "racines" && d?.template === "racines");\n  if (VORTEX_BROWSER_ONLY) desired = desired.filter(d => d?.name === "chrome-devtools" && d?.template === "chrome-devtools");'
 );
-agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY) await startBuiltin();');
+agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY && !VORTEX_BROWSER_ONLY) await startBuiltin();');
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,
   "desktop_commander: { command: ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'] }",
