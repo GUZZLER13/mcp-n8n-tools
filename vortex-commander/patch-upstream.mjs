@@ -118,7 +118,7 @@ browserTests = exact(browserTests,
   "assert.deepEqual(resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}).command.slice(0, 3), ['npx', '-y', '@playwright/mcp@latest']);",
   "assert.throws(() => resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}), /unknown template/);");
 browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);",
-  "assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools', 'racines']);");
+  "assert.deepEqual(Object.keys(CATALOG), ['racines', 'chrome-devtools']);");
 put('test/backends.test.js', browserTests);
 
 let agent = get('agent/agent.js');
