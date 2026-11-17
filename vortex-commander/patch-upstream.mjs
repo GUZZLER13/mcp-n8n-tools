@@ -109,6 +109,34 @@ const envLine = agent.split('\n').find(x => x.startsWith('const PASS_ENV = '));
 if (!envLine) throw new Error('Cannot find child process environment');
 agent = exact(agent, envLine,
   "const PASS_ENV = ['DISPLAY','XAUTHORITY','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','LANG','LC_ALL','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP','SystemRoot','WINDIR','HOMEDRIVE','HOMEPATH','ComSpec','PATHEXT'];");
+// Keep Chrome calls sequential within this agent to prevent overlapping UI
+// actions. Pace full navigations modestly to avoid accidental bursts;
+// never retry challenges, forbidden pages or HTTP rate-limit responses.
+agent = exact(agent,
+  'const exposedTools = () => [...routes.values()].map((r) => r.tool);',
+  'const exposedTools = () => [...routes.values()].map((r) => r.tool);\n' +
+  'const BROWSER_NAV_GAP_MS = 2500;\n' +
+  'let browserToolLane = Promise.resolve();\n' +
+  'let lastBrowserNavStart = 0;\n' +
+  'const callBrowserTool = (route, args, timeout) => {\n' +
+  '  const run = async () => {\n' +
+  '    if (["navigate_page", "new_page", "navigate_history"].includes(route.real)) {\n' +
+  '      const delay = Math.max(0, lastBrowserNavStart + BROWSER_NAV_GAP_MS - Date.now());\n' +
+  '      if (delay) await new Promise(resolve => setTimeout(resolve, delay));\n' +
+  '      lastBrowserNavStart = Date.now();\n' +
+  '    }\n' +
+  '    return route.slot.conn.callTool(route.real, args, timeout);\n' +
+  '  };\n' +
+  '  const pending = browserToolLane.then(run, run);\n' +
+  '  browserToolLane = pending.then(() => {}, () => {});\n' +
+  '  return pending;\n' +
+  '};');
+agent = exact(agent,
+  'const result = await route.slot.conn.callTool(route.real, args, Number.isFinite(t) ? t + 4000 : 60_000);',
+  'const timeout = Number.isFinite(t) ? t + 4000 : 60_000;\n' +
+  '        const result = await (route.slot.name === "chrome-devtools"\n' +
+  '          ? callBrowserTool(route, args, timeout)\n' +
+  '          : route.slot.conn.callTool(route.real, args, timeout));');
 put('agent/agent.js', agent);
 
 // The gateway and VPS agent initially talk only over localhost. We do not
