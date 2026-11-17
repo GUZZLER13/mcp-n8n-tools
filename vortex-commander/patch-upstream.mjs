@@ -43,10 +43,14 @@ oauthSource = exact(oauthSource,
 put('gateway/oauth.js', oauthSource);
 
 // Chrome DevTools is the single browser backend for guided archive research.
-// Keep ephemeral browser profiles as the default; a dedicated persistent
-// Chrome profile is an explicit opt-in to preserve authenticated sessions.
-// No arbitrary user-data-dir or unsafe Chrome flags are exposed in the console.
+// Keep ephemeral browser profiles by default. An explicit opt-in uses an
+// absolute per-user, per-device profile directory for repeatable persistence.
+// Never share the personal Chrome profile or expose arbitrary browser flags.
 let browserBackends = get('agent/backends.js');
+browserBackends = exact(browserBackends,
+  '// Catalog of MCP servers the gateway console may ask an agent to run.',
+  "import os from 'node:os';\nimport path from 'node:path';\n\n" +
+  '// Catalog of MCP servers the gateway console may ask an agent to run.');
 browserBackends = exact(browserBackends,
   "params: [\n      { key: 'autoConnect', label: 'Use my running Chrome (--autoConnect): your real profile and logged-in sessions', type: 'boolean', default: false },\n      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n    ],\n    // --autoConnect attaches to an existing browser, so it replaces --isolated/--headless (which only apply to a browser it launches itself)\n    args: (p) => (p.autoConnect ? ['--autoConnect'] : ['--isolated', ...(p.headless ? ['--headless'] : [])]),",
   "params: [\n" +
@@ -54,7 +58,10 @@ browserBackends = exact(browserBackends,
   "      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n" +
   "      { key: 'persistent', label: 'Keep dedicated Chrome DevTools session on this device (opt-in)', type: 'boolean', default: false },\n" +
   "    ],\n" +
-  "    args: (p) => p.autoConnect ? ['--autoConnect'] : [...(p.persistent ? [] : ['--isolated']), ...(p.headless ? ['--headless'] : [])],");
+  "    args: (p) => p.autoConnect ? ['--autoConnect'] : [\n" +
+  "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
+  "      ...(p.headless ? ['--headless'] : []),\n" +
+  "    ],");
 put('agent/backends.js', browserBackends);
 
 let agent = get('agent/agent.js');
