@@ -7,7 +7,7 @@
 // node gateway/state-backup.mjs verify --file /safe/backup.vxb --key-file /safe/backup.key
 import { DatabaseSync, backup } from 'node:sqlite';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 
 const LIMIT = 128 * 1024 * 1024;
@@ -103,7 +103,12 @@ async function snapshot() {
     const encrypted = Buffer.concat([cipher.update(clear), cipher.final()]);
     writeFileSync(encryptedPending, Buffer.concat([header, encrypted, cipher.getAuthTag()]), { flag: 'wx', mode: 0o600 });
     chmodSync(encryptedPending, 0o600);
-    renameSync(encryptedPending, output);
+    try {
+      linkSync(encryptedPending, output);
+    } catch (error) {
+      if (error.code === 'EEXIST') throw Error('BACKUP_EXISTS_REFUSING_OVERWRITE');
+      throw error;
+    }
     console.log(JSON.stringify({
       result: 'BACKUP_CREATED', file: basename(output),
       encryptedBytes: lstatSync(output).size, tableCounts: counts,

@@ -211,6 +211,8 @@ fs.copyFileSync(path.join(kitDir, 'configure-backend.mjs'),
   path.join(root, 'agent', 'configure-backend.mjs'));
 fs.copyFileSync(path.join(kitDir, 'racines-mcp.mjs'),
   path.join(root, 'agent', 'racines-mcp.mjs'));
+fs.copyFileSync(path.join(kitDir, 'state-backup.mjs'),
+  path.join(root, 'gateway', 'state-backup.mjs'));
 
 
 /* Performance overlay: read-only batched checks; opt-in metadata-only traces.

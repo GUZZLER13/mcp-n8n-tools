@@ -10,16 +10,20 @@ import { openDb } from '../gateway/db.js';
 test('encrypted online backup includes committed WAL data, restores and preserves all tables', t => {
   const work = mkdtempSync(join(tmpdir(), 'vortex-backup-test-'));
   chmodSync(work, 0o700);
-  t.after(() => rmSync(work, { force: true, recursive: true }));
+  let db;
+  t.after(() => {
+    db?.close();
+    rmSync(work, { force: true, recursive: true });
+  });
   const sourceFile = join(work, 'live.sqlite');
   const output = join(work, 'vortex-state.vxb');
   const keyFile = join(work, 'backup.key');
   const wrongKey = join(work, 'wrong.key');
+  const altered = join(work, 'altered.vxb');
   const executable = resolve('gateway/state-backup.mjs');
   writeFileSync(keyFile, randomBytes(32), { flag: 'wx', mode: 0o600 });
   writeFileSync(wrongKey, randomBytes(32), { flag: 'wx', mode: 0o600 });
-  const db = openDb(sourceFile);
-  t.after(() => db.close());
+  db = openDb(sourceFile);
   db.exec('PRAGMA wal_autocheckpoint = 0');
   const secret = 'confidential-' + randomBytes(24).toString('hex');
   db.prepare('INSERT INTO devices(device_id,secret_hash,created_at) VALUES(?,?,?)')
@@ -28,6 +32,7 @@ test('encrypted online backup includes committed WAL data, restores and preserve
     .run('2026-11-17T00:00:00.000Z','read_file','success',null);
   db.prepare('INSERT INTO settings(key,value) VALUES (?,?)')
     .run('existing_setting','preserve');
+  assert.ok(readFileSync(sourceFile + '-wal').length > 32, 'committed WAL frames must exist');
   const exec = (action, file = output, passwordFile = keyFile) => {
     const args = action === 'snapshot'
       ? [executable, action, '--db', sourceFile, '--out', file, '--key-file', passwordFile]
@@ -56,6 +61,10 @@ test('encrypted online backup includes committed WAL data, restores and preserve
   const wrong = exec('verify', output, wrongKey);
   assert.equal(wrong.status,1,'wrong key must fail verification');
   assert.doesNotMatch(wrong.stdout + wrong.stderr,/confidential-|test-device|BEGIN/i);
+  const corrupted = Buffer.from(encrypted);
+  corrupted[corrupted.length - 17] ^= 1;
+  writeFileSync(altered, corrupted, { flag: 'wx', mode: 0o600 });
+  assert.equal(exec('verify', altered).status, 1, 'altered ciphertext must fail verification');
   assert.equal(db.prepare('SELECT count(*) AS n FROM devices').get().n,1);
   assert.equal(db.prepare('SELECT count(*) AS n FROM audit_logs').get().n,1);
   assert.deepEqual(readdirSync(work).filter(name => name.startsWith('.vortex-snapshot-work-')),[],

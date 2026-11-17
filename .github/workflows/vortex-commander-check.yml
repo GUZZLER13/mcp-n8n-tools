@@ -72,6 +72,8 @@ jobs:
           node --test test/vortex-vps-user-policy.test.js
           cp ../vortex-commander/test-racines-mcp.mjs test/vortex-racines-mcp.test.js
           node --test test/vortex-racines-mcp.test.js
+          cp ../vortex-commander/test-state-backup.mjs test/vortex-state-backup.test.js
+          node --test test/vortex-state-backup.test.js
           bash -n deploy/install-linux.sh
           grep -q -- '--port 8766' deploy/remote-mcp-gateway.service.in
           grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
