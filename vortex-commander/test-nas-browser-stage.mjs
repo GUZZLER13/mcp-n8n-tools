@@ -1,0 +1,57 @@
+// Read-only regression checks for gated NAS Chromium staging.
+// No package install, privilege escalation, account change, or live SQLite access.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+const script = path.resolve('vortex-commander/nas-browser-stage.sh');
+const source = fs.readFileSync(script, 'utf8');
+const stage = (args = []) => spawnSync('bash', [script, ...args], {
+  encoding: 'utf8', timeout: 10000, env: { PATH: '/usr/bin:/bin' }
+});
+
+test('staging shell script parses', () => {
+  const result = spawnSync('bash', ['-n', script], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('check-only path precedes all mutations and reports no gateway changes', () => {
+  assert.ok(source.indexOf('  --check)') > 0);
+  assert.ok(source.indexOf('  --apply)') > source.indexOf('  --check)'));
+  assert.match(source, /PRODUCTION_CHANGES=none/);
+  assert.match(source, /STAGED_NOT_ACTIVATED=yes/);
+  assert.doesNotMatch(source, /systemctl (?:restart|stop)|service (?:restart|stop)|--no-sandbox|rm -rf/);
+});
+
+test('apply requires local root and a restore receipt before any installation', () => {
+  const applyAt = source.indexOf('  --apply)');
+  const gateAt = source.indexOf("    check_receipt \"$3\"", applyAt);
+  const rootAt = source.indexOf("    [ \"$(id -u)\" -eq 0 ]", applyAt);
+  const pkgAt = source.indexOf('/usr/bin/apt-get install -y --no-install-recommends chromium', applyAt);
+  const npmAt = source.indexOf('/usr/bin/npm install --prefix "$PREFIX"', applyAt);
+  assert.ok(rootAt > applyAt && gateAt > rootAt);
+  assert.ok(pkgAt > gateAt && npmAt > gateAt);
+  assert.match(source, /--independent-copy-confirmed/);
+  assert.match(source, /STAGING_REFUSED/);
+});
+
+test('rejects untrusted or incomplete existing staged trees without npm overwrite', () => {
+  assert.match(source, /ALREADY_STAGED_NOT_ACTIVATED=yes/);
+  assert.match(source, /Existing staging lacks a complete pinned MCP package/);
+  assert.match(source, /Existing Chrome MCP has unexpected version/);
+  assert.match(source, /find \"$PREFIX\" -xdev/);
+  assert.match(source, /-perm \/022/);
+  assert.match(source, /sha256sum/);
+  assert.match(source, /chrome-devtools-mcp@1\.13\.0/);
+});
+
+test('never initiates staging on a different OS', { skip: process.platform !== 'linux' }, () => {
+  const osRelease = fs.readFileSync('/etc/os-release', 'utf8');
+  const isExpected = /^ID=debian$/m.test(osRelease) && /^VERSION_ID="?13"?$/m.test(osRelease);
+  if (isExpected) return;
+  const result = stage(['--apply', '--receipt', '/nonexistent/verification.json', '--independent-copy-confirmed']);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /STAGING_REFUSED:/);
+});
