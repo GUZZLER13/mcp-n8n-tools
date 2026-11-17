@@ -54,3 +54,41 @@ Sources : [Chrome DevTools — configuration](https://developer.chrome.com/docs/
 - Retour arrière : désactiver le backend Chrome dans la console, restaurer la version précédente de l'agent ; ne pas effacer automatiquement le profil persistant (il contient des sessions). En cas d'abandon, supprimer le profil manuellement sur l'appareil concerné après déconnexion des sites.
 
 **Limitations :** la sécurité de Chrome DevTools dépend du degré de confiance accordé à l'agent. Un outil de navigation peut accéder aux pages et parfois à des informations de session ; l'isolement du profil réduit l'exposition, il ne la supprime pas. Les sites peuvent expirer les sessions ou bloquer l'automatisation malgré un navigateur normal.
+
+
+## Audit NAS réel — 17 novembre 2026 (sans installation)
+
+Le contrôle a été réalisé par VORTEX Commander sur `pc-nas`, avec la commande en lecture seule `sh vortex-commander/nas-chrome-preflight.sh` (script ajouté dans cette PR). Ce diagnostic **n'installe rien**, ne touche ni à SQLite VORTEX ni aux profils du navigateur.
+
+| Point vérifié | Résultat |
+| --- | --- |
+| Machine | `pc-nas`, en ligne |
+| Système | Debian GNU/Linux 13 (trixie), x86_64 |
+| Compte de l'agent actuel | `stef`, HOME `/var/lib/vortex-commander-nas` en permissions 0700 |
+| Node / npm | `v22.23.3` / `10.9.9` |
+| Chrome / Chromium dans le PATH | Absents |
+| Chromium proposé par les dépôts Debian | `156.0.8078.79-1~deb13u1` (candidat observé, **non installé**) |
+| Mémoire disponible au contrôle | Environ 10,3 Gio |
+| Espace disque système libre | Environ 25,5 Gio |
+| Session graphique | Aucune, ni X11 ni Wayland détecté |
+| Espaces de noms utilisateur | Autorisés (`unprivileged_userns_clone=1`), mais cela ne prouve pas que la sandbox Chrome fonctionnera |
+| Outils VORTEX actifs sur le NAS | Backend `desktop-commander` seul ; aucun `chrome_*` |
+| Sauvegarde/restauration de la vraie base VORTEX | **Non vérifiée dans cet audit : déploiement interdit par STATE-PRESERVATION-GATE.md** |
+
+### Écarts techniques à lever avant activation
+
+1. **Séparation des privilèges** : l'agent actuel tourne sous le compte `stef` et expose aussi les outils de commande. Le simple blocage des chemins du profil dans `agent/policy.js` n'empêche pas un outil terminal exécuté sous le même compte de lire les sessions. La cible est un **compte système navigateur sans privilège** et un agent/browser MCP séparé ne recevant aucun outil d'administration ; le serveur VORTEX et ses cinq appareils existants restent conservés. Ne pas activer les sessions authentifiées sur l'agent administrateur actuel.
+2. **Navigateur Debian** : installer Chromium depuis un dépôt approuvé ou Chrome depuis une source officielle une fois la sauvegarde vérifiée. Si Chromium est retenu, la commande Chrome DevTools MCP doit explicitement pointer vers l'exécutable (`--executablePath=/usr/bin/chromium`), option à introduire et tester de manière contrôlée dans le backend, sans permettre de commandes ou chemins arbitraires. Référence : [configuration officielle](https://developer.chrome.com/docs/devtools/agents/get-started/configuration/).
+3. **Absence d'interface graphique** : le NAS peut commencer en `headless: true` pour les consultations publiques ; une connexion humaine (Bitwarden/MFA) ne peut pas se faire dans une fenêtre locale tant qu'une interface graphique sécurisée et supervisée n'est pas prévue. Ne jamais transférer les cookies du Chrome personnel ni contourner les authentifications.
+4. **Sandbox** : jamais de `--no-sandbox` en solution de facilité, aucun port DevTools ouvert sur Internet ou Tailscale ; valider la sandbox Chromium/Chrome sous le compte dédié.
+5. **Conservation** : obtenir la sauvegarde SQLite réelle chiffrée et sa restauration isolée par le canal opérateur autorisé, sans contourner la politique d'accès, **avant installation ou activation**.
+
+### Recette après levée du blocage
+
+- Vérifier l'identité OS du processus Chrome et des outils MCP, l'absence de shell et d'accès aux secrets chez l'agent navigateur ; contrôler la séparation des permissions.
+- Démarrer une session jetable `--isolated --headless` sur une page publique autorisée ; vérifier navigation, captures, arrêt, consommation de ressources et absence de données sensibles dans les journaux.
+- Tester une session persistante **dans le seul profil dédié**, fermeture puis redémarrage, sans impact sur les outils existants.
+- Surveiller les machines et les appels par appareil dans VORTEX Dashboard, sans confondre le nouveau compte navigateur et `pc-nas`.
+- Préserver la possibilité de désactiver uniquement le backend Chrome et de revenir à la version antérieure de l'agent, sans effacer automatiquement ses profils.
+
+**État à l'issue de l'audit :** préparation et diagnostic seulement ; aucun navigateur installé, aucune modification du service NAS, aucune preuve de déploiement Chrome en production.
