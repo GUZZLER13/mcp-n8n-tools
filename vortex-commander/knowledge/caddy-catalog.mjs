@@ -1,12 +1,11 @@
 // Caddy-first, read-only architecture discovery. No secrets or Caddy config
 // contents leave the host: return only allowlisted host/path/handler/loopback target.
 import {execFileSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
 
 const CADDY = '/usr/bin/caddy';
 const CONFIG = '/etc/caddy/Caddyfile';
-const ALLOWED_HOST = /^(?:\\*\\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/;
-const ALLOWED_PATH = /^\\/[a-zA-Z0-9_.*\\/:-]{0,179}$/;
+const ALLOWED_HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/;
+const ALLOWED_PATH = /^\/[a-zA-Z0-9_.*\/:-]{0,179}$/;
 
 function safeHosts(matchers, fallback) {
   const hosts = new Set();
@@ -33,7 +32,7 @@ function safeUpstreams(handler) {
   for (const entry of Array.isArray(handler?.upstreams) ? handler.upstreams : []) {
     const dial = entry?.dial;
     if (typeof dial !== 'string') continue;
-    const m = dial.match(/^(127\\.0\\.0\\.1|localhost|\\[::1\\]):([0-9]{1,5})$/);
+    const m = dial.match(/^(127\.0\.0\.1|localhost|\[::1\]):([0-9]{1,5})$/);
     if (m && Number(m[2]) >= 1 && Number(m[2]) <= 65535) {
       result.add('loopback:' + m[2]);
     } else {
