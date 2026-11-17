@@ -168,6 +168,16 @@ agent = exact(agent,
   'async function reconcile(desired) {\n  if (RACINES_READER_ONLY) desired = desired.filter(d => d?.name === "racines" && d?.template === "racines");\n  if (VORTEX_BROWSER_ONLY) desired = desired.filter(d => d?.name === "chrome-devtools" && d?.template === "chrome-devtools");'
 );
 agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY && !VORTEX_BROWSER_ONLY) await startBuiltin();');
+// In browser-only mode, the gateway console must never be able to re-enable
+// dangerous tools via enabled_tools. Default-disabled is not a hard deny.
+agent = exact(agent,
+  'const on = new Set(enabledNames(slot));',
+  'const on = new Set(enabledNames(slot));\\n' +
+  '    if (VORTEX_BROWSER_ONLY && slot.name === "chrome-devtools") {\\n' +
+  '      on.delete("upload_file");\\n' +
+  '      on.delete("evaluate_script");\\n' +
+  '    }');
+
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,
   "desktop_commander: { command: ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'] }",
