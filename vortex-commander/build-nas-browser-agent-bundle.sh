@@ -35,11 +35,6 @@ npm ci --prefix "$work" --omit=dev --ignore-scripts --no-bin-links --no-audit --
 [ -d "$work/node_modules/ws" ] && [ -d "$work/node_modules/@modelcontextprotocol/sdk" ] ||
   fail 'Required runtime dependencies missing'
 [ -z "$(find "$work" -type l -print -quit)" ] || fail 'Archive contains symlinks'
-# Actual source must not be invoked in root context, and no credentials are bundled.
-if grep -Eiq 'device_secret[" ]*[:=]|BEGIN (RSA|PRIVATE|OPENSSH) KEY|token[[:space:]]*[:=]' "$work/agent/"*.js; then
-  # Source may legitimately contain variable *names*. Do not reject based on those.
-  : 
-fi
 tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
   -C "$work" -cf - agent package.json package-lock.json node_modules | gzip -n > "$archive"
 sha256sum "$archive" > "$archive.sha256"
