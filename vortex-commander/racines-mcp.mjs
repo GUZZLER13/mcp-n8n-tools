@@ -111,7 +111,11 @@ const tools = [
       required: ['familyId', 'personId'],
       properties: {
         familyId: { type: 'string', description: 'UUID de famille autorisée' },
-        personId: { type: 'string', description: 'Identifiant canonique de personne' }
+        personId: { type: 'string', description: 'Identifiant canonique de personne' },
+        before: {
+          type: 'string',
+          description: 'Pour lire les recherches précédentes, reprendre researchNextCursor.'
+        }
       }
     }
   }
@@ -142,6 +146,11 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         if (!validPerson(args.personId)) throw Error('Invalid person ID');
         apiPath = '/v1/families/' + args.familyId + '/people/' +
           encodeURIComponent(args.personId) + '/research-dossier';
+        if (args.before !== undefined) {
+          if (typeof args.before !== 'string' || !UUID.test(args.before))
+            throw Error('Invalid research cursor');
+          apiPath += '?before=' + encodeURIComponent(args.before);
+        }
       }
     }
     const data = await requestRead(apiPath);

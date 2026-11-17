@@ -28,6 +28,8 @@
 | `racines_list_families` | Lecture | Seulement les familles explicitement autorisées |
 | `racines_find_people` | Lecture | Recherche côté serveur, retour paginé, source et version |
 | `racines_get_research_dossier` | Lecture | `familyId` + identifiant canonique ; réponse issue de l'API privée et sans URLs R2 signées |
+
+Pour lire les recherches précédentes, rappeler `racines_get_research_dossier` avec le même `familyId`, le même `personId` et `before` égal à `researchNextCursor` de la réponse. Un curseur nul indique le début du journal.
 | `racines_get_research_history` | Lecture | Pagination et provenance ; distinguer pistes et preuves validées |
 | `racines_record_research` | Écriture contrôlée | Approbation de la mission et droit de contribuer ; clé idempotente ; URL sans secret |
 | `racines_propose_person_update` | Proposition | Ne jamais modifier silencieusement identité, parenté, publication |

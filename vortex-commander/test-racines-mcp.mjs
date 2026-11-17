@@ -36,6 +36,9 @@ test('RACINES MCP exposes exactly three read-only tools and never reveals missin
     assert.equal(tool.inputSchema.additionalProperties, false);
     assert.doesNotMatch(tool.name, /(write|edit|delete|admin|terminal|chrome)/i);
   }
+  const dossier = tools.find(tool => tool.name === 'get_research_dossier').inputSchema;
+  assert.equal(dossier.properties.before.type, 'string');
+  assert.ok(!dossier.required.includes('before'));
 
   // Even with a valid-looking family ID the connector lacks a private
   // machine certificate in this isolated test HOME and must fail closed.
@@ -43,7 +46,8 @@ test('RACINES MCP exposes exactly three read-only tools and never reveals missin
   const cases = [
     ['list_families', {}],
     ['find_people', { familyId: bogus, query: 'Marty' }],
-    ['get_research_dossier', { familyId: bogus, personId: 'person-fictive' }]
+    ['get_research_dossier', { familyId: bogus, personId: 'person-fictive' }],
+    ['get_research_dossier', { familyId: bogus, personId: 'person-fictive', before: bogus }]
   ];
   for (const [name, args] of cases) {
     const result = await client.callTool({ name, arguments: args });
