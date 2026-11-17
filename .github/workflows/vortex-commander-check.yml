@@ -90,6 +90,17 @@ jobs:
           grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
           ! grep -q '@latest' agent/agent.js
 
+      - name: Real headless Chrome MCP navigation on isolated CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$chrome" && test -x "$chrome"
+          cp vortex-commander/test-chrome-real-browser.mjs upstream/test/vortex-chrome-real-browser.test.js
+          cd upstream
+          VORTEX_BROWSER_STAGED_PACKAGE="$RUNNER_TEMP/vortex-browser-mcp/node_modules/chrome-devtools-mcp" \
+          VORTEX_TEST_CHROME_BIN="$chrome" \
+            node --test test/vortex-chrome-real-browser.test.js
       - name: Build browser-only agent bundle for operator review (no deployment)
         shell: bash
         run: |
