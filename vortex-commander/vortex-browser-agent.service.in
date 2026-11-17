@@ -1,0 +1,47 @@
+# Template only. Do not enable until VORTEX real state + external stores
+# have a tested independent restore and the browser agent is separately paired.
+[Unit]
+Description=VORTEX Commander NAS — isolated browser-only agent
+Documentation=https://github.com/GUZZLER13/mcp-n8n-tools
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+ConditionPathExists=/var/lib/vortex-browser/.config/remote-mcp/device.json
+
+[Service]
+Type=simple
+User=vortex-browser
+Group=vortex-browser
+WorkingDirectory=/opt/vortex-browser-agent
+Environment=HOME=/var/lib/vortex-browser
+Environment=VORTEX_BROWSER_ONLY=true
+Environment=NODE_ENV=production
+Environment=PATH=/opt/vortex-browser-mcp/bin:/usr/bin:/bin
+ExecStart=/opt/vortex-browser-mcp/bin/node /opt/vortex-browser-agent/agent/agent.js --config /var/lib/vortex-browser/.config/remote-mcp/device.json
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/vortex-browser
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryHigh=3G
+MemoryMax=4G
+TasksMax=512
+# Chromium needs working user namespaces and JIT. Do not add
+# RestrictNamespaces, MemoryDenyWriteExecute or --no-sandbox blindly.
+# Network access is required for authorized websites and gateway WSS.
+
+[Install]
+WantedBy=multi-user.target
