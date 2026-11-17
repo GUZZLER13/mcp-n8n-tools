@@ -63,8 +63,12 @@ test('pinned Chrome MCP starts, navigates a local page and closes cleanly', { ti
     pageId, url: 'http://127.0.0.1:' + port + '/smoke'
   }});
   assert.equal(output.isError, undefined, JSON.stringify(output.content).slice(0,1000));
-  const body = (output.content ?? []).map(x => x.text ?? '').join('\n');
-  assert.match(body, /VORTEX_BROWSER_SMOKE_OK/, 'Browser did not render the local test page');
+  const navResponse = (output.content ?? []).map(x => x.text ?? '').join('\\n');
+  assert.match(navResponse, /VORTEX isolated browser CI test/, 'Browser did not load the test page title');
+  const snapshot = await client.callTool({name: 'take_snapshot', arguments: {pageId}});
+  assert.equal(snapshot.isError, undefined, JSON.stringify(snapshot.content).slice(0,1000));
+  const snapshotText = (snapshot.content ?? []).map(x => x.text ?? '').join('\\n');
+  assert.match(snapshotText, /VORTEX_BROWSER_SMOKE_OK/, 'Rendered page content missing from DOM snapshot');
   const list = await client.callTool({name: 'list_pages', arguments: {}});
   assert.equal(list.isError, undefined, 'Cannot inspect page list after navigation');
   assert.match((list.content ?? []).map(x => x.text ?? '').join('\n'), /127\.0\.0\.1/, 'Opened page missing');
