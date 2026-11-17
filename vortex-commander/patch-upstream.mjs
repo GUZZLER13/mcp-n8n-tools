@@ -92,6 +92,7 @@ browserBackends = exact(
   "  if (template === 'racines') {\n" +
     "    if (name !== 'racines' || Object.keys(params).length) throw new Error('invalid RACINES options');\n" +
     "    if (process.platform !== 'linux') throw new Error('RACINES backend requires a Linux service host');\n" +
+    "    if (process.env.VORTEX_RACINES_READER_ONLY !== 'true' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines') throw new Error('RACINES backend requires dedicated isolated reader');\n" +
     "    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'racines-mcp.mjs');\n" +
     "    if (!fs.existsSync(script)) throw new Error('RACINES backend not installed');\n" +
     "    return { name: 'racines', command: [process.execPath, script], prefix: 'racines_', defaultDisabled: [] };\n" +
@@ -122,6 +123,21 @@ browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);
 put('test/backends.test.js', browserTests);
 
 let agent = get('agent/agent.js');
+// Reader-only mode is for a different, non-root OS identity and a separate
+// paired VORTEX device. Never run Desktop Commander or Chrome in this mode.
+agent = exact(agent,
+  "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));",
+  "const RACINES_READER_ONLY = process.env.VORTEX_RACINES_READER_ONLY === 'true';\n" +
+  "if (RACINES_READER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines')) {\n" +
+  "  throw Error('RACINES reader requires a dedicated unprivileged vortex-racines account');\n" +
+  "}\n" +
+  "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));"
+);
+agent = exact(agent,
+  'async function reconcile(desired) {',
+  'async function reconcile(desired) {\n  if (RACINES_READER_ONLY) desired = desired.filter(d => d?.name === "racines" && d?.template === "racines");'
+);
+agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY) await startBuiltin();');
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,
   "desktop_commander: { command: ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'] }",
