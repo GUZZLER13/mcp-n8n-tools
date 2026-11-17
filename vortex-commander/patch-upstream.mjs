@@ -81,7 +81,8 @@ knowledgeBackends = exact(knowledgeBackends,
 put('agent/backends.js', knowledgeBackends);
 for (const [source, destination] of [
   ['caddy-catalog.mjs','knowledge-catalog.mjs'],
-  ['knowledge-mcp.mjs','knowledge-mcp.mjs']]) {
+  ['knowledge-mcp.mjs','knowledge-mcp.mjs'],
+  ['knowledge-cache.mjs','knowledge-cache.mjs']]) {
   fs.copyFileSync(path.join(kitDir, 'knowledge', source), path.join(root, 'agent', destination));
 }
 
