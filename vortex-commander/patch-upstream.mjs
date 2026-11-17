@@ -67,7 +67,7 @@ browserBackends = exact(browserBackends,
   "      ...(p.debianChromium === true ? ['--executablePath=/usr/bin/chromium'] : []),\n" +
   "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
   "      ...(p.headless ? ['--headless'] : []),\n" +
-  "      '--no-javascript-evaluation', '--redact-network-headers',\n" +
+  "      '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',\n" +
   "      '--no-usage-statistics', '--no-performance-crux',\n" +
   "    ],");
 browserBackends = exact(browserBackends,
@@ -134,7 +134,7 @@ let browserTests = get('test/backends.test.js');
 browserTests = exact(browserTests, "'chrome-devtools-mcp@latest'", "'chrome-devtools-mcp@1.13.0'", 2);
 browserTests = exact(browserTests,
   "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless']);",
-  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless', '--no-javascript-evaluation', '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux']);");
+  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless', '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux']);");
 browserTests = exact(browserTests,
   "assert.deepEqual(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--autoConnect']);",
   "assert.ok(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command.includes('--isolated'));" );
