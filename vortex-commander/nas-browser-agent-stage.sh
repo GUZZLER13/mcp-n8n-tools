@@ -81,6 +81,14 @@ case "$mode" in
       fail 'Bundle checksum differs from independently reviewed CI artifact'
     [ "$(stat -c %s "$bundle")" -le 100000000 ] ||
       fail 'Browser agent archive exceeds expected size'
+    # Use the same read-only archive validator as the CI build before any
+    # extraction. Keep the independent checksum comparison above.
+    SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+    [ -f "$SCRIPT_DIR/audit-browser-agent-archive.mjs" ] &&
+      [ ! -L "$SCRIPT_DIR/audit-browser-agent-archive.mjs" ] ||
+      fail 'Reviewed archive audit script unavailable'
+    /usr/bin/node "$SCRIPT_DIR/audit-browser-agent-archive.mjs" "$bundle" "$5" ||
+      fail 'Browser archive failed independent structural audit'
     stage=$(mktemp -d /opt/.vortex-browser-agent-stage.XXXXXXXX) ||
       fail 'Cannot create protected staging directory'
     cleanup() {
