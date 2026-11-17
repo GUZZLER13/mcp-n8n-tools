@@ -77,10 +77,17 @@ browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
   "if (template === 'chrome-devtools' && p.debianChromium === true && (process.platform !== 'linux' || !fs.existsSync('/usr/bin/chromium'))) throw new Error('Debian Chromium requires installed /usr/bin/chromium on Linux');\n  " +
   "if (template === 'chrome-devtools' && process.env.VORTEX_BROWSER_ONLY === 'true') {\n" +
-  "  const backendRoot = path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-backend', 'node_modules', 'chrome-devtools-mcp');\n" +
+  "  const trustedRoot = '/opt/vortex-browser-mcp';\n" +
+  "  const backendRoot = path.join(trustedRoot, 'node_modules', 'chrome-devtools-mcp');\n" +
   "  const manifest = path.join(backendRoot, 'package.json');\n" +
   "  const cli = path.join(backendRoot, 'out', 'Default', 'gen', 'src', 'bin', 'chrome-devtools-mcp.js');\n" +
   "  if (!fs.existsSync(manifest) || !fs.existsSync(cli) || JSON.parse(fs.readFileSync(manifest, 'utf8')).version !== '1.13.0') throw new Error('Pinned Chrome DevTools 1.13.0 must be preinstalled for browser-only agent');\n" +
+  "  // Reject executable/package trees writable by the unprivileged browser account.\n" +
+  "  for (const localFile of [trustedRoot, backendRoot, manifest, cli, process.execPath]) {\n" +
+  "    const stat = fs.lstatSync(localFile);\n" +
+  "    if (stat.isSymbolicLink() || stat.uid !== 0 || (stat.mode & 0o022)) throw new Error('Browser runtime must be root-owned and not group/world-writable');\n" +
+  "  }\n" +
+
   "  return { name, command: [process.execPath, cli, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };\n" +
   "}\n" +
 
