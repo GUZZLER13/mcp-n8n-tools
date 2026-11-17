@@ -73,6 +73,17 @@ case "$mode" in
         [ "$(sha256sum "$PREFIX/bin/node" | cut -d ' ' -f1)" = "$EXPECTED_NODE_SHA" ] ||
         fail 'An existing browser Node binary must not be overwritten'
     fi
+    # Existing identities must be checked before any package changes.
+    if id -u vortex-browser >/dev/null 2>&1; then
+      [ "$(id -u vortex-browser)" -ne 0 ] || fail 'Browser account cannot be root'
+      [ "$(getent passwd vortex-browser | cut -d : -f6)" = "$BROWSER_HOME" ] ||
+        fail 'Existing browser account uses an unexpected home'
+      if [ -e "$BROWSER_HOME" ]; then
+        [ -d "$BROWSER_HOME" ] && [ ! -L "$BROWSER_HOME" ] &&
+          [ "$(stat -c %U "$BROWSER_HOME")" = vortex-browser ] ||
+          fail 'Browser home ownership mismatch'
+      fi
+    fi
     # Non-destructive to existing VORTEX services, devices and secrets.
     /usr/bin/apt-get install -y --no-install-recommends chromium
     if ! id -u vortex-browser >/dev/null 2>&1; then
