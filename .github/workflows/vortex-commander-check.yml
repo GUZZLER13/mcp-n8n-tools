@@ -6,6 +6,11 @@ on:
     paths:
       - 'vortex-commander/**'
       - '.github/workflows/vortex-commander-check.yml'
+  pull_request:
+    branches: [vortex-commander-hardening]
+    paths:
+      - 'vortex-commander/**'
+      - '.github/workflows/vortex-commander-check.yml'
   workflow_dispatch:
 
 permissions:
@@ -54,6 +59,8 @@ jobs:
           node-version: '22'
       - name: Apply safety and compatibility fixes
         run: node vortex-commander/patch-upstream.mjs upstream
+      - name: Check Chrome-only browser profiles and policy contracts
+        run: node --test vortex-commander/test-chrome-backend.mjs
       - name: Run locked dependencies and upstream suite
         working-directory: upstream
         shell: bash
@@ -132,6 +139,8 @@ jobs:
         run: |
           node vortex-commander/patch-upstream.mjs upstream
           if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          node --test vortex-commander/test-chrome-backend.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Chrome backend contract failed' }
           node --test vortex-commander/test-preserve-existing-dc.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Existing Desktop Commander config preservation regression' }
           $tokens = $null
