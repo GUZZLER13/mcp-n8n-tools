@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 
 const root = process.env.VORTEX_BROWSER_STAGED_PACKAGE;
 if (!root || !path.isAbsolute(root)) throw Error('VORTEX_BROWSER_STAGED_PACKAGE must be absolute');
@@ -65,4 +65,86 @@ test('actual CLI parser recognizes dedicated persistent profile option', async (
   ], {...process.env, HOME: process.env.HOME || '/tmp'}, false).parse();
   assert.equal(opts.userDataDir, profile);
   assert.equal(opts.headless, true);
+});
+
+
+test('real pinned MCP server answers initialization and tool discovery over stdio', {timeout: 20000}, async (t) => {
+  // No Chrome/browser is launched: only MCP handshake and tools/list are sent.
+  const child = spawn(process.execPath, [
+    cli, '--headless', '--isolated', '--executablePath=/usr/bin/chromium',
+    '--no-javascript-evaluation', '--no-file-navigations',
+    '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux',
+  ], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+      PATH: process.env.PATH || '/usr/bin:/bin',
+      HOME: process.env.HOME || '/tmp',
+      NO_COLOR: '1',
+    },
+  });
+  t.after(() => {
+    child.stdin.destroy();
+    child.kill('SIGTERM');
+  });
+  let buffer = '';
+  let stderr = '';
+  const pending = new Map();
+  child.stderr.on('data', chunk => {
+    stderr = (stderr + chunk.toString('utf8')).slice(-2000);
+  });
+  child.stdout.on('data', chunk => {
+    buffer += chunk.toString('utf8');
+    let end;
+    while ((end = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, end).trim();
+      buffer = buffer.slice(end + 1);
+      let reply;
+      try { reply = JSON.parse(line); } catch { continue; }
+      if (!Number.isSafeInteger(reply.id)) continue;
+      const request = pending.get(reply.id);
+      if (!request) continue;
+      pending.delete(reply.id);
+      clearTimeout(request.timer);
+      if (reply.error) request.reject(new Error(JSON.stringify(reply.error)));
+      else request.resolve(reply.result);
+    }
+  });
+  child.on('error', error => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(error);
+    }
+    pending.clear();
+  });
+  child.on('exit', (code, signal) => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error('Chrome MCP exited ' + (code ?? signal) + ': ' + stderr));
+    }
+    pending.clear();
+  });
+  const call = (id, method, params) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error('MCP ' + method + ' timed out: ' + stderr));
+    }, 12000);
+    pending.set(id, {resolve, reject, timer});
+    child.stdin.write(JSON.stringify({
+      jsonrpc: '2.0', id, method, params,
+    }) + '\n');
+  });
+  const init = await call(1, 'initialize', {
+    protocolVersion: '2025-03-26', capabilities: {},
+    clientInfo: {name: 'vortex-browser-ci-smoke', version: '1.0.0'},
+  });
+  assert.ok(init?.serverInfo?.name, 'Real Chrome MCP server identification missing');
+  child.stdin.write(JSON.stringify({
+    jsonrpc: '2.0', method: 'notifications/initialized',
+  }) + '\n');
+  const available = await call(2, 'tools/list', {});
+  assert.ok(Array.isArray(available?.tools), 'Real MCP tools/list response missing');
+  const names = available.tools.map(tool => tool.name);
+  assert.ok(names.includes('list_pages'), 'Navigation discovery unavailable');
+  assert.ok(names.includes('new_page'), 'Navigation command unavailable');
+  assert.ok(!names.includes('evaluate_script'), 'Unsafe script evaluation must be absent');
 });
