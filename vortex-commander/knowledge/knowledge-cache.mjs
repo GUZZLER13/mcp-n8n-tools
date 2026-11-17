@@ -8,12 +8,15 @@ export function createInventoryCache(load, {
   let attempts=0;
   function startRefresh() {
     if (pending) return pending;
-    retryAfter=now()+retryMs; attempts++;
+    attempts++;
     const run=Promise.resolve().then(load).then(data=>{
       if (!data || !Array.isArray(data.domains) || !Array.isArray(data.routes))
         throw Error('INVALID_INVENTORY');
-      snapshot=data; expiresAt=now()+ttlMs;
+      snapshot=data; expiresAt=now()+ttlMs; retryAfter=0;
       return data;
+    }).catch(error=>{
+      retryAfter=now()+retryMs;
+      throw error;
     });
     pending=run.finally(()=>{pending=null;});
     // Always mark failure handled even for fire-and-forget background refresh.
