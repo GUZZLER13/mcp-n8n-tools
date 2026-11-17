@@ -77,6 +77,8 @@ browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
   "if (template === 'chrome-devtools' && p.debianChromium === true && (process.platform !== 'linux' || !fs.existsSync('/usr/bin/chromium'))) throw new Error('Debian Chromium requires installed /usr/bin/chromium on Linux');\n  " +
   "if (template === 'chrome-devtools' && process.env.VORTEX_BROWSER_ONLY === 'true') {\n" +
+  "  if (p.debianChromium !== true || p.headless !== true || p.persistent === true) throw new Error('NAS browser agent requires headless isolated Debian Chromium');\n" +
+  "  if (Object.keys(p).some(k => !['debianChromium', 'headless', 'persistent'].includes(k))) throw new Error('Unsupported isolated NAS browser options');\n" +
   "  const trustedRoot = '/opt/vortex-browser-mcp';\n" +
   "  const backendRoot = path.join(trustedRoot, 'node_modules', 'chrome-devtools-mcp');\n" +
   "  const manifest = path.join(backendRoot, 'package.json');\n" +
