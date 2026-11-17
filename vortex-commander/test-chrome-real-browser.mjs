@@ -53,8 +53,14 @@ test('pinned Chrome MCP starts, navigates a local page and closes cleanly', { ti
   // disables its exposure using CATALOG.default_disabled (tested separately).
   // Do not conflate upstream tool discovery with our gateway authorization.
 
+  const initial = await client.callTool({name: 'list_pages', arguments: {}});
+  assert.equal(initial.isError, undefined, 'Cannot inspect initial browser tabs');
+  const tabText = (initial.content ?? []).map(x => x.text ?? '').join('\\n');
+  const tab = tabText.match(/(?:^|\\n)\\s*(\\d+):\\s+/);
+  assert.ok(tab, 'Could not obtain an actual pageId from Chrome: ' + tabText.slice(0,400));
+  const pageId = Number(tab[1]);
   const output = await client.callTool({name: 'navigate_page', arguments: {
-    url: 'http://127.0.0.1:' + port + '/smoke'
+    pageId, url: 'http://127.0.0.1:' + port + '/smoke'
   }});
   assert.equal(output.isError, undefined, JSON.stringify(output.content).slice(0,1000));
   const body = (output.content ?? []).map(x => x.text ?? '').join('\n');
