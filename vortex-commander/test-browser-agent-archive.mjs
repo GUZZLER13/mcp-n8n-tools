@@ -15,7 +15,8 @@ const testArchive = (extraFiles = [], extraEntries = []) => {
     fs.mkdirSync(path.join(root, folder), { recursive: true });
   }
   for (const name of [
-    'agent/agent.js', 'agent/backends.js', 'agent/policy.js', 'package.json',
+    'agent/agent.js', 'agent/backends.js', 'agent/policy.js',
+    'agent/browser-session.mjs', 'agent/browser-agent-session.mjs', 'package.json',
     'package-lock.json', 'node_modules/ws/index.js',
     'node_modules/@modelcontextprotocol/sdk/index.js',
   ]) {

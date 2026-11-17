@@ -1,6 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BrowserSession } from './browser-session.mjs';
+import { createBrowserAgentSession, browserSessionTools } from './browser-agent-session.mjs';
+
+test('agent control tools are bounded, pause real dispatch and stop rejects later calls', async () => {
+  const calls = [];
+  const agent = createBrowserAgentSession(async payload => { calls.push(payload); return { content: [] }; });
+  assert.equal(browserSessionTools.length, 4);
+  assert.equal(agent.control('unrelated_tool'), null);
+  assert.throws(() => agent.control('browser_session_pause', { arbitrary: true }));
+  agent.control('browser_session_pause');
+  const pending = agent.run({ real: 'click' }, { uid: 'fixture' }, 1500);
+  assert.equal(calls.length, 0);
+  agent.control('browser_session_resume');
+  await pending;
+  assert.equal(calls[0].timeout, 1500);
+  const status = agent.control('browser_session_status');
+  assert.doesNotMatch(JSON.stringify(status), /fixture/);
+  agent.control('browser_session_stop');
+  await assert.rejects(agent.run({ real: 'click' }, {}, 1500), /stopped/);
+});
 
 test('pause drains no queued actions, resume serializes and journal excludes private arguments', async () => {
   let release;

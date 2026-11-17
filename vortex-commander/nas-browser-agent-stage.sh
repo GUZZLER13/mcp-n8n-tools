@@ -111,7 +111,7 @@ case "$mode" in
     trap cleanup EXIT
     tar -tzf "$bundle" > "$stage/entries.txt" ||
       fail 'Could not list browser archive'
-    for required in agent/agent.js agent/backends.js agent/policy.js package.json package-lock.json; do
+    for required in agent/agent.js agent/backends.js agent/policy.js agent/browser-session.mjs agent/browser-agent-session.mjs package.json package-lock.json; do
       grep -Fxq "$required" "$stage/entries.txt" ||
         fail 'Browser archive is missing a required source file'
     done

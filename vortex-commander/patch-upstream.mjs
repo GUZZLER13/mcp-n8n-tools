@@ -149,6 +149,11 @@ browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);
 put('test/backends.test.js', browserTests);
 
 let agent = get('agent/agent.js');
+agent = exact(agent, "import fs from 'node:fs';",
+  "import fs from 'node:fs';\nimport { createBrowserAgentSession, browserSessionTools } from './browser-agent-session.mjs';");
+for (const name of ['browser-session.mjs', 'browser-agent-session.mjs']) {
+  put('agent/' + name, fs.readFileSync(path.join(kitDir, name), 'utf8'));
+}
 // Reader-only mode is for a different, non-root OS identity and a separate
 // paired VORTEX device. Never run Desktop Commander or Chrome in this mode.
 agent = exact(agent,
@@ -194,23 +199,27 @@ agent = exact(agent, envLine,
 // never retry challenges, forbidden pages or HTTP rate-limit responses.
 agent = exact(agent,
   'const exposedTools = () => [...routes.values()].map((r) => r.tool);',
-  'const exposedTools = () => [...routes.values()].map((r) => r.tool);\n' +
+  'const exposedTools = () => [...routes.values()].map((r) => r.tool).concat(VORTEX_BROWSER_ONLY ? browserSessionTools : []);\n' +
   'const BROWSER_NAV_GAP_MS = 2500;\n' +
-  'let browserToolLane = Promise.resolve();\n' +
   'let lastBrowserNavStart = 0;\n' +
-  'const callBrowserTool = (route, args, timeout) => {\n' +
-  '  const run = async () => {\n' +
+  'const browserSession = createBrowserAgentSession(async ({ route, args, timeout }, signal) => {\n' +
+  '    if (signal.aborted) throw Error("Session stopped");\n' +
   '    if (["navigate_page", "new_page", "navigate_history"].includes(route.real)) {\n' +
   '      const delay = Math.max(0, lastBrowserNavStart + BROWSER_NAV_GAP_MS - Date.now());\n' +
   '      if (delay) await new Promise(resolve => setTimeout(resolve, delay));\n' +
+  '      if (signal.aborted) throw Error("Session stopped");\n' +
   '      lastBrowserNavStart = Date.now();\n' +
   '    }\n' +
   '    return route.slot.conn.callTool(route.real, args, timeout);\n' +
-  '  };\n' +
-  '  const pending = browserToolLane.then(run, run);\n' +
-  '  browserToolLane = pending.then(() => {}, () => {});\n' +
-  '  return pending;\n' +
-  '};');
+  '});\n' +
+  'const callBrowserTool = (route, args, timeout) => browserSession.run(route, args, timeout);');
+agent = exact(agent,
+  "      if (m.method === 'tools/call') {",
+  "      if (m.method === 'tools/call') {\n" +
+  "        if (VORTEX_BROWSER_ONLY) {\n" +
+  "          const control = browserSession.control(m.params.name, m.params.arguments);\n" +
+  "          if (control) return reply({ result: control });\n" +
+  "        }");
 agent = exact(agent,
   'const result = await route.slot.conn.callTool(route.real, args, Number.isFinite(t) ? t + 4000 : 60_000);',
   'const timeout = Number.isFinite(t) ? t + 4000 : 60_000;\n' +

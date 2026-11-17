@@ -14,7 +14,7 @@ Le flux vidéo CDP reste une évolution à mesurer sur le NAS. Il exige un canal
 
 La pause suspend les actions en attente. Une action engagée termine avant la pause effective du navigateur. L’arrêt signale l’annulation au transport et rejette les actions en attente. Le raccord au transport devra réellement interrompre le processus Chrome lorsque son appel ne respecte pas le signal d’annulation. Un résultat MCP portant isError apparaît comme un échec. Une réussite technique doit encore être accompagnée d’une vérification fonctionnelle pour être présentée comme résultat vérifié.
 
-Ce composant est testé localement sur des opérations simulées. Son raccord à l’agent, les endpoints authentifiés, les délais d’expiration, le dashboard et la visualisation réelle restent à développer.
+Ce composant est testé localement sur des opérations simulées. L’overlay raccorde désormais les appels Chrome à sa file et expose status/pause/resume/stop sur le seul agent navigateur dédié. Les commandes de contrôle passent par le canal MCP existant. Les endpoints du dashboard, les délais d’expiration, la visualisation réelle et l’arrêt physique d’un appel déjà engagé restent à développer. Après stop, une nouvelle session exige actuellement le redémarrage du processus dédié.
 
 ## Raccordement à réaliser
 
