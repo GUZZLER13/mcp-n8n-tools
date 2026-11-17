@@ -130,14 +130,14 @@ let agent = get('agent/agent.js');
 // paired VORTEX device. Never run Desktop Commander or Chrome in this mode.
 agent = exact(agent,
   "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));",
-  "const RACINES_READER_ONLY = process.env.VORTEX_RACINES_READER_ONLY === 'true';\\n" +
-  "const VORTEX_BROWSER_ONLY = process.env.VORTEX_BROWSER_ONLY === 'true';\\n" +
-  "if (RACINES_READER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines')) {\\n" +
-  "  throw Error('RACINES reader requires a dedicated unprivileged vortex-racines account');\\n" +
-  "}\\n" +
-  "if (VORTEX_BROWSER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-browser')) {\\n" +
-  "  throw Error('VORTEX browser mode requires dedicated unprivileged vortex-browser account');\\n" +
-  "}\\n" +
+  "const RACINES_READER_ONLY = process.env.VORTEX_RACINES_READER_ONLY === 'true';\n" +
+  "const VORTEX_BROWSER_ONLY = process.env.VORTEX_BROWSER_ONLY === 'true';\n" +
+  "if (RACINES_READER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines')) {\n" +
+  "  throw Error('RACINES reader requires a dedicated unprivileged vortex-racines account');\n" +
+  "}\n" +
+  "if (VORTEX_BROWSER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-browser')) {\n" +
+  "  throw Error('VORTEX browser mode requires dedicated unprivileged vortex-browser account');\n" +
+  "}\n" +
   "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));"
 );
 agent = exact(agent,
