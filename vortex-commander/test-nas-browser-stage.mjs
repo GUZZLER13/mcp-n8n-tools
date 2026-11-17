@@ -91,3 +91,23 @@ test('systemd browser agent service remains unprivileged, isolated and not autom
   assert.doesNotMatch(unit, /^(?:ExecStartPre=.*(?:npm install|chown|useradd)|User=root|Environment=.*(?:SECRET|TOKEN))$/mi);
   assert.doesNotMatch(source, /systemctl (?:enable|start|restart)/);
 });
+
+test('separate browser-agent archive stage keeps backup gate, preserves gateway, and never starts a service', () => {
+  const install = fs.readFileSync(path.resolve('vortex-commander/nas-browser-agent-stage.sh'), 'utf8');
+  const syntax = spawnSync('bash', ['-n', 'vortex-commander/nas-browser-agent-stage.sh'], {encoding:'utf8', timeout: 10000});
+  assert.equal(syntax.status, 0, syntax.stderr);
+  const rootCheck = install.indexOf('[ "$(id -u)" -eq 0 ]');
+  const receipt = install.indexOf('receipt_ok "$7"');
+  const runtime = install.indexOf('trusted_node', rootCheck);
+  const digest = install.indexOf('sha256sum "$bundle"', rootCheck);
+  const extract = install.indexOf('tar --no-same-owner --no-same-permissions -xzf', rootCheck);
+  const move = install.indexOf('mv -T "$stage/payload" "$PREFIX"', rootCheck);
+  assert.ok(rootCheck > 0 && receipt > rootCheck && runtime > receipt);
+  assert.ok(digest > runtime && extract > digest && move > extract);
+  assert.ok(install.includes('NO_SERVICE_STARTED=yes'));
+  assert.ok(install.includes('NO_DEVICE_PAIRED=yes'));
+  assert.ok(install.includes('An existing browser agent must not be overwritten'));
+  assert.ok(install.includes("['-','d'].includes(line[0])"));
+  assert.ok(install.includes("agent\\.js|backends\\.js|policy\\.js"));
+  assert.doesNotMatch(install, /systemctl\s+(?:enable|start|restart)|--no-sandbox|device_secret\s*=/);
+});
