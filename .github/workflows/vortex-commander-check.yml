@@ -62,6 +62,15 @@ jobs:
         run: node vortex-commander/patch-upstream.mjs upstream
       - name: Check Chrome-only browser profiles and policy contracts
         run: node --test vortex-commander/test-chrome-backend.mjs
+      - name: Verify pinned Chrome MCP npm distribution before NAS staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/vortex-browser-mcp"
+          npm install --prefix "$runtime" --ignore-scripts --no-audit --no-fund \
+            --no-bin-links --save-exact chrome-devtools-mcp@1.13.0
+          VORTEX_BROWSER_STAGED_PACKAGE="$runtime/node_modules/chrome-devtools-mcp" \
+            node --test vortex-commander/test-chrome-distribution.mjs
       - name: Run locked dependencies and upstream suite
         working-directory: upstream
         shell: bash
