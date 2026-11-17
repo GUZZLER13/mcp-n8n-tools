@@ -93,27 +93,34 @@ Le contrôle a été réalisé par VORTEX Commander sur `pc-nas`, avec la comman
 
 **État à l'issue de l'audit :** préparation et diagnostic seulement ; aucun navigateur installé, aucune modification du service NAS, aucune preuve de déploiement Chrome en production.
 
-## Démarrage accéléré du navigateur NAS (branche, non déployé)
+## Démarrage accéléré et isolé du navigateur NAS (branche, non déployé)
 
-Le mode `VORTEX_BROWSER_ONLY=true` est réservé à un **agent séparé** tournant sous le compte Linux non privilégié `vortex-browser`. Il refuse de démarrer sous un autre compte (ou root), ne démarre pas Desktop Commander et accepte exclusivement le backend Chrome autorisé. Aucun accès aux outils `racines_*` n'y est ajouté.
+Le mode `VORTEX_BROWSER_ONLY=true` est réservé à un **agent séparé** tournant sous le compte Linux non privilégié `vortex-browser`. Il refuse de démarrer sous un autre compte (ou sous root), ne démarre pas Desktop Commander et accepte exclusivement le backend Chrome autorisé. Aucun accès aux outils `racines_*` n'y est ajouté.
 
-Pour éviter une résolution `npx` et un téléchargement npm au **démarrage** de ce backend, le mode isolé lance directement le JavaScript installé de `chrome-devtools-mcp@1.13.0` avec `process.execPath`. Il exige la présence et la version exacte du paquet dans le HOME du compte dédié :
+Pour éviter toute installation npm **au moment d'une demande ChatGPT**, le mode isolé lance directement le JavaScript de `chrome-devtools-mcp@1.13.0` avec `process.execPath`. Le runtime doit être préinstallé hors connexion utilisateur, à un chemin fixe, avec une propriété et des permissions vérifiables :
 
-- Racine : `~/.local/share/vortex-commander/chrome-backend/`
-- Paquet : `node_modules/chrome-devtools-mcp/`
-- Entrée : `out/Default/gen/src/bin/chrome-devtools-mcp.js`
+- Racine du logiciel, détenue par root : `/opt/vortex-browser-mcp/` (0755, pas de droits d'écriture pour groupe/autres).
+- Paquet : `/opt/vortex-browser-mcp/node_modules/chrome-devtools-mcp/`.
+- Entrée : `out/Default/gen/src/bin/chrome-devtools-mcp.js`.
+- Exécutable Node de l'agent : **Node >=22.13**, détenu par root, non modifiable par le compte navigateur, idéalement `/opt/vortex-browser-mcp/bin/node`.
+- Données de navigation **séparées du code** : home privé `/var/lib/vortex-browser` (0700), profil persistant facultatif dans ce home uniquement.
 
-**Provisionnement futur, uniquement après le contrôle de sauvegarde/restauration VORTEX et la création du compte dédié par un opérateur habilité :**
+**Constat vérifié sur le NAS :** le Node système `/usr/bin/node` est v20.19.2, satisfaisant le moteur de Chrome DevTools MCP 1.13.0 mais **insuffisant pour l'agent VORTEX upstream (Node >=22.13)**. Un Node v22.23.3 est présent dans `/opt/vortex-commander-nas/bin/node`, actuellement détenu par l'utilisateur `enzo` (mode 0755). Pour la séparation effective, le navigateur doit disposer d'une **copie ou installation Node 22 indépendante, contrôlée et détenue par root**, sans modifier le runtime ni l'agent NAS existants. L'empreinte SHA-256 observée du Node v22 sur le NAS était `fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48` ; revérifier sa provenance et son empreinte avant provisionnement, particulièrement si le binaire a été mis à jour.
 
-```sh
-# À exécuter dans une session du compte vortex-browser, pas dans celle de l'agent actuel :
-mkdir -p "$HOME/.local/share/vortex-commander/chrome-backend"
-npm install --prefix "$HOME/.local/share/vortex-commander/chrome-backend" \
-  --ignore-scripts --no-audit --no-fund --save-exact chrome-devtools-mcp@1.13.0
-```
+Le code de résolution Chrome impose que le paquet soit présent **et exactement en version 1.13.0**. Il refuse également les composants du chemin d'exécution qui ne sont pas détenus par root ou qui sont modifiables par le groupe ou les autres utilisateurs. Aucun téléchargement `npx` de secours n'est effectué dans ce mode.
 
-Le paquet est provisionné **une fois**, hors des requêtes ChatGPT ; ne jamais ajouter `npm install` dans la séquence d'une navigation. L'échec de la vérification du paquet empêche le backend de démarrer plutôt que d'utiliser `npx` ou `@latest` en secours. Réviser les chemins et refaire les tests si le paquet officiel change sa structure.
+### Provisionnement opérateur après validation complète des sauvegardes
 
-Après activation seulement : configurer le navigateur dédié `headless: true`, `debianChromium: true` pour utiliser le chemin fixe `/usr/bin/chromium`, `persistent: false` au départ. Les sessions authentifiées persistantes et leur interface de connexion humaine demandent un chantier ultérieur séparé.
+**Ne pas exécuter ces commandes avant la validation de `STATE-PRESERVATION-GATE.md`, incluant la sauvegarde réelle chiffrée, sa copie indépendante et sa restauration isolée.** Elles sont à effectuer uniquement depuis une session système privilégiée habilitée, jamais depuis une page Web ou un outil Chrome.
 
-Mesurer ensuite le démarrage froid, le redémarrage avec backend déjà installé et les navigations à chaud. La vitesse dépend toujours du site et du réseau ; l'objectif est de **supprimer les téléchargements et démarrages superflus**, pas d'affaiblir la protection des comptes.
+1. Installer Chromium depuis le dépôt Debian approuvé et préparer un compte Linux `vortex-browser` sans privilège, avec home privé `/var/lib/vortex-browser`. Préserver le compte `stef`, les services et les agents déjà enregistrés.
+2. Provisionner et vérifier une installation Node 22 détenue par root, distincte du Node partagé déjà utilisé par l'agent NAS. Vérifier propriétaire, permissions, version et empreinte.
+3. Installer une seule fois `chrome-devtools-mcp@1.13.0` via le gestionnaire de paquets sur `/opt/vortex-browser-mcp`, **sans scripts de cycle de vie**, sans alias `@latest`, puis vérifier la version et rendre tout l'arbre logiciel root-owned et non inscriptible par le compte `vortex-browser`. Ne jamais copier des mots de passe, cookies, secrets ou fichiers de profil personnels.
+4. Installer l'agent VORTEX patché dans un emplacement protégé, sous une configuration et une identité d'appairage **distinctes** de l'agent NAS actuel. Démarrer sous `vortex-browser` avec `VORTEX_BROWSER_ONLY=true` et le Node 22 dédié ; vérifier qu'aucun outil shell ou fichier n'est exposé.
+5. Commencer avec `headless: true`, `debianChromium: true`, `persistent: false`. Tester uniquement des pages publiques. Le support des sessions authentifiées et leur connexion humaine fera l'objet de contrôles supplémentaires.
+6. Consigner les résultats, l'utilisation mémoire/CPU et les temps de démarrage, ainsi que la méthode de désactivation du **nouvel agent uniquement**. Ne pas remplacer `pc-nas` ni effacer son état.
+7. Ne pas traiter les deux agents NAS comme deux machines physiques dans le Dashboard : les outils et les métriques doivent rester attribués à l'identité d'agent correcte, avec regroupement de présentation explicitement documenté.
+
+**Sécurité résiduelle :** le compte OS dédié supprime le partage direct des permissions administrateur. Il ne remplace pas une séparation des autorisations *côté passerelle et côté client* : les contenus Web non fiables ne doivent pas pouvoir déclencher automatiquement des outils d'administration par injection d'instructions. Avant les sessions authentifiées, vérifier les restrictions d'accès, l'origine des actions et les demandes de validation humaine.
+
+Mesurer ensuite le premier démarrage (à froid), le démarrage avec backend préinstallé (à chaud) et le temps des navigations réelles. L'optimisation élimine les téléchargements et démarrages inutiles, **sans promettre un temps de réponse instantané pour les sites externes**.
