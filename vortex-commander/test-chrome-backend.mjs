@@ -25,7 +25,7 @@ test('default Chrome session is disposable and package version is fixed', () => 
   const backend = resolveBackend(spec(), {});
   assert.deepEqual(backend.command, [
     'npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated',
-    '--no-javascript-evaluation', '--redact-network-headers',
+    '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',
     '--no-usage-statistics', '--no-performance-crux'
   ]);
   assert.ok(!backend.command.some(arg => /autoConnect|browserUrl|wsEndpoint/i.test(arg)));
@@ -37,7 +37,7 @@ test('persistent session uses dedicated per-account local profile, not the perso
   assert.deepEqual(backend.command, [
     'npx', '-y', 'chrome-devtools-mcp@1.13.0',
     '--user-data-dir=' + dedicated,
-    '--headless', '--no-javascript-evaluation', '--redact-network-headers',
+    '--headless', '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',
     '--no-usage-statistics', '--no-performance-crux'
   ]);
   assert.ok(!backend.command.includes('--isolated'));
@@ -49,6 +49,9 @@ test('unknown autoConnect input cannot activate attachment to personal Chrome', 
   assert.ok(!backend.command.includes('--autoConnect'));
   assert.ok(backend.command.includes('--redact-network-headers'));
   assert.ok(backend.command.includes('--no-javascript-evaluation'));
+  assert.ok(backend.command.includes('--no-file-navigations'));
+  assert.ok(!backend.command.some(arg => arg === '--file-navigations'));
+
   assert.ok(!CATALOG['chrome-devtools'].params.some(p => p.key === 'autoConnect'));
 });
 
