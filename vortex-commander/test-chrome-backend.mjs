@@ -12,8 +12,8 @@ const { CATALOG, resolveBackend } = await import(pathToFileURL(path.join(root, '
 const { loadPolicy, check } = await import(pathToFileURL(path.join(root, 'policy.js')).href);
 const spec = (params = {}) => ({ template: 'chrome-devtools', params });
 
-test('only Chrome DevTools is offered as a browser template', () => {
-  assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools', 'racines']);
+test('only approved Chrome and RACINES MCP templates are offered', () => {
+  assert.deepEqual(Object.keys(CATALOG), ['racines', 'chrome-devtools']);
   assert.equal(CATALOG['chrome-devtools'].prefix, 'chrome_');
   assert.ok(CATALOG['chrome-devtools'].default_disabled.includes('evaluate_script'));
   assert.ok(CATALOG['chrome-devtools'].default_disabled.includes('upload_file'));
