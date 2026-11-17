@@ -53,3 +53,21 @@ Ces chiffres sont des repères **partiels** et datés, **pas** une preuve de l'e
 5. Documenter le résultat, les nouveaux outils et la procédure de retour arrière dans la PR existante.
 
 **Interdiction de conclure « toutes les données conservées » avant la preuve de sauvegarde/restauration complète du magasin VORTEX et le contrôle des autres stockages.**
+
+## Exécution opérateur du premier snapshot
+
+Préparer l’overlay au commit testé dans un répertoire séparé. Utiliser le Node de la passerelle (22.23.3 lors du contrôle du 17 novembre), puis exécuter l’utilitaire depuis une session opérateur déjà habilitée à lire le magasin SQLite. Renseigner les variables ci-dessous dans cette session avec des chemins absolus. Le dossier de destination doit être privé (0700), le fichier de clé doit contenir 32 octets et avoir des permissions 0600. Garder la clé à part de la copie chiffrée.
+
+```sh
+"$VORTEX_NODE" "$VORTEX_BACKUP_TOOL" snapshot \
+  --db "$VORTEX_STATE_DB" --out "$VORTEX_BACKUP_FILE" --key-file "$VORTEX_BACKUP_KEY"
+```
+
+Transférer le fichier chiffré vers la destination indépendante choisie. Vérifier cette copie dans une zone privée et isolée, sans réseau vers les appareils. Les variables de l’étape suivante désignent les fichiers présents dans cette zone.
+
+```sh
+"$VORTEX_NODE" "$VORTEX_BACKUP_TOOL" verify \
+  --file "$VORTEX_BACKUP_FILE" --key-file "$VORTEX_BACKUP_KEY"
+```
+
+Conserver le résultat `RESTORE_VERIFIED` et l’inventaire des tables sans données personnelles. Ce contrôle ouvre un SQLite restauré temporaire et vérifie son intégrité et ses compteurs. Il reste ensuite à vérifier le chargement de cet état dans une passerelle isolée et la conservation des configurations externes avant la bascule. Aucun fichier d’état, clé ou jeton ne doit être envoyé dans le rapport à ChatGPT.
