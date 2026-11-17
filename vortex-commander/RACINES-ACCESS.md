@@ -6,6 +6,7 @@
 
 - **Une seule source généalogique : PostgreSQL RACINES**, derrière l'API existante, avec les objets documentaires originaux stockés séparément dans R2 privé.
 - **Une seule passerelle VORTEX** sur VPS, qui achemine les missions et contrôle les permissions.
+- **Connexion RACINES permanente, sans jeton manuel ni demande d'autorisation à chaque lecture** : l'agent de service VORTEX est reconnu automatiquement par un canal interne authentifié (par exemple certificat client mTLS entre services sous Tailscale), configuré une fois par l'administrateur. **Ce mécanisme est une cible à implémenter et non un accès déjà actif**.
 - **NAS PC NAS** : Chrome DevTools isolé, recherche Web et, si nécessaire, traitement documentaire temporaire. **Pas de base généalogique miroir.**
 - Le site `/arbres` est une interface, pas une seconde source. Les vues `/arbres/doya`, `/arbres/marty` et `/arbres/mirales` ne doivent pas créer des bases distinctes.
 - Les documents, pages Web et contenus externes ne deviennent jamais des instructions d'administration VORTEX.
@@ -13,7 +14,7 @@
 ## Authentification et séparation des responsabilités
 
 1. Les utilisateurs humains gardent leurs propres comptes et leur MFA. Bitwarden Password Manager fournit leurs identifiants dans une session humaine.
-2. La lecture automatisée de RACINES nécessite **une identité technique ou une délégation explicite**, limitée aux familles autorisées. Les droits sont vérifiés côté API et PostgreSQL RLS, pas par le texte d'un prompt.
+2. La lecture automatisée de RACINES repose sur une **identité technique de service persistante**, limitée aux familles prévues, et non sur un jeton à générer/coller dans ChatGPT. Une fois le canal configuré, aucune confirmation répétée n'est demandée pour consulter les dossiers. Un canal interne Tailscale **ne suffit pas seul** : le service doit vérifier l'identité de l'appelant (par exemple mTLS) et appliquer les droits RACINES côté serveur.
 3. Dans un premier temps, fournir seulement des outils de lecture à l'agent : la création d'une mission n'implique pas le droit de modifier des données.
 4. Chaque écriture est une autorisation distincte, limitée à la famille, à la personne et à la mission ; `clientId` évite les doublons. Les changements de filiation, d'identité ou de publication passent par le mécanisme humain de propositions.
 5. Pas de mot de passe maître Bitwarden, secret d'API, clé R2, cookie, URL présignée ou contenu de stockage de session dans ChatGPT, GitHub, les journaux ou l'interface publique.
@@ -65,7 +66,7 @@ En cas de panne réseau, de redémarrage NAS ou de perte de session, reprendre u
 
 **Phase A — RACINES** : faire passer la PR n° 62, valider les migrations et preuves de sauvegardes ; ne pas publier de données privées.
 
-**Phase B — VORTEX lecture** : implémenter l'API métier MCP et la délégation sécurisée, mesurer la latence réelle des dossiers. Déployer à un petit périmètre.
+**Phase B — VORTEX lecture** : implémenter l'API métier MCP et une connexion machine-à-machine durable et authentifiée, sans jeton utilisateur à générer, avec accès lecture seule, permissions par famille et révocation côté administrateur. Mesurer la latence réelle des dossiers. Déployer à un petit périmètre.
 
 **Phase C — NAS** : activer Chrome dans un environnement isolé ; vérifier la connexion Bitwarden manuelle et la reprise de session.
 
