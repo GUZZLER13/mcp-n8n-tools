@@ -122,7 +122,7 @@ case "$mode" in
     # Debian Node 20.19 + root-owned npm are used only to preinstall the
     # pinned Chrome MCP package. The VORTEX agent uses copied Node 22.
     /usr/bin/npm install --prefix "$PREFIX" --ignore-scripts --no-audit \
-      --no-fund --save-exact chrome-devtools-mcp@1.13.0
+      --no-fund --no-bin-links --save-exact chrome-devtools-mcp@1.13.0
     /usr/bin/node -e "if (require('$PREFIX/node_modules/chrome-devtools-mcp/package.json').version !== '1.13.0') process.exit(1)"
     chown -R root:root "$PREFIX"
     chmod -R go-w "$PREFIX"
