@@ -111,3 +111,18 @@ test('separate browser-agent archive stage keeps backup gate, preserves gateway,
   assert.ok(install.includes("agent\\.js|backends\\.js|policy\\.js"));
   assert.doesNotMatch(install, /systemctl\s+(?:enable|start|restart)|--no-sandbox|device_secret\s*=/);
 });
+
+test('privileged archive auditor can only run from a trusted root-owned path', () => {
+  const code = fs.readFileSync(path.resolve('vortex-commander/nas-browser-agent-stage.sh'), 'utf8');
+  const anchor = code.indexOf('audit_file="$SCRIPT_DIR/audit-browser-agent-archive.mjs"');
+  const loop = code.indexOf('while :; do', anchor);
+  const owner = code.indexOf('stat -c %u "$current"', loop);
+  const perms = code.indexOf('find "$current" -maxdepth 0 -perm /022', owner);
+  const symlink = code.indexOf('[ ! -L "$current" ]', loop);
+  const run = code.indexOf('/usr/bin/node "$SCRIPT_DIR/audit-browser-agent-archive.mjs"', anchor);
+  assert.ok(anchor > 0 && loop > anchor && symlink > loop);
+  assert.ok(owner > symlink && perms > owner && run > perms,
+    'root must verify the auditor and each parent path before evaluating its JavaScript');
+  assert.match(code, /Archive auditor path must be root-owned and non-writable by others/);
+  assert.match(code, /current=\$\(dirname -- "\$current"\)/);
+});
