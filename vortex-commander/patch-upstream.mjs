@@ -74,6 +74,30 @@ browserBackends = exact(browserBackends,
 browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
   "return { name, command: ['npx', '-y', 'chrome-devtools-mcp@1.13.0', ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };");
+// Fixed RACINES reader backend: no arbitrary commands, no user-managed token.
+browserBackends = exact(
+  browserBackends,
+  "import os from 'node:os';",
+  "import os from 'node:os';\nimport fs from 'node:fs';\nimport { fileURLToPath } from 'node:url';"
+);
+browserBackends = exact(
+  browserBackends,
+  'export const CATALOG = {',
+  "export const CATALOG = {\n" +
+    "  racines: { title: 'RACINES (lecture seule)', description: 'Family research via private mTLS, no browser credentials', prefix: 'racines_', params: [], default_disabled: [] },"
+);
+browserBackends = exact(
+  browserBackends,
+  "  if (template === 'custom') {",
+  "  if (template === 'racines') {\n" +
+    "    if (name !== 'racines' || Object.keys(params).length) throw new Error('invalid RACINES options');\n" +
+    "    if (process.platform !== 'linux') throw new Error('RACINES backend requires a Linux service host');\n" +
+    "    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'racines-mcp.mjs');\n" +
+    "    if (!fs.existsSync(script)) throw new Error('RACINES backend not installed');\n" +
+    "    return { name: 'racines', command: [process.execPath, script], prefix: 'racines_', defaultDisabled: [] };\n" +
+    "  }\n" +
+    "  if (template === 'custom') {"
+);
 put('agent/backends.js', browserBackends);
 
 // Keep upstream end-to-end regression coverage while replacing only its old
@@ -94,7 +118,7 @@ browserTests = exact(browserTests,
   "assert.deepEqual(resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}).command.slice(0, 3), ['npx', '-y', '@playwright/mcp@latest']);",
   "assert.throws(() => resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}), /unknown template/);");
 browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);",
-  "assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools']);");
+  "assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools', 'racines']);");
 put('test/backends.test.js', browserTests);
 
 let agent = get('agent/agent.js');
@@ -169,6 +193,8 @@ for (const name of ['agent', 'gateway']) {
 }
 fs.copyFileSync(path.join(kitDir, 'configure-backend.mjs'),
   path.join(root, 'agent', 'configure-backend.mjs'));
+fs.copyFileSync(path.join(kitDir, 'racines-mcp.mjs'),
+  path.join(root, 'agent', 'racines-mcp.mjs'));
 
 
 /* Performance overlay: read-only batched checks; opt-in metadata-only traces.
