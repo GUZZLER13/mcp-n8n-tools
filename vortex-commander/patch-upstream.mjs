@@ -172,10 +172,10 @@ agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY && !VORT
 // dangerous tools via enabled_tools. Default-disabled is not a hard deny.
 agent = exact(agent,
   'const on = new Set(enabledNames(slot));',
-  'const on = new Set(enabledNames(slot));\\n' +
-  '    if (VORTEX_BROWSER_ONLY && slot.name === "chrome-devtools") {\\n' +
-  '      on.delete("upload_file");\\n' +
-  '      on.delete("evaluate_script");\\n' +
+  'const on = new Set(enabledNames(slot));\n' +
+  '    if (VORTEX_BROWSER_ONLY && slot.name === "chrome-devtools") {\n' +
+  '      on.delete("upload_file");\n' +
+  '      on.delete("evaluate_script");\n' +
   '    }');
 
 // Never implicitly launch @latest; explicit pinned package setup is required.
