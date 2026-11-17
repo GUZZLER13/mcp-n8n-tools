@@ -67,8 +67,35 @@ test('RACINES cannot start through the general-purpose VORTEX agent', () => {
   // These contracts are applied to the actual pinned upstream agent by the
   // overlay. They prevent any shell, file or browser backend in reader-only mode.
   const agent = fs.readFileSync(path.join(root, 'agent.js'), 'utf8');
-  assert.match(agent, /if \(!RACINES_READER_ONLY\) await startBuiltin\(\);/);
+  assert.match(agent, /if \(!RACINES_READER_ONLY && !VORTEX_BROWSER_ONLY\) await startBuiltin\(\);/);
   assert.match(agent, /if \(RACINES_READER_ONLY\) desired = desired\.filter\(/);
   assert.match(agent, /os\.userInfo\(\)\.username !== 'vortex-racines'/);
   assert.match(agent, /process\.getuid\?\.\(\) === 0/);
+});
+
+test('dedicated browser-only agent exposes no Desktop Commander and cannot use RACINES', () => {
+  const agent = fs.readFileSync(path.join(root, 'agent.js'), 'utf8');
+  assert.match(agent, /VORTEX_BROWSER_ONLY = process\.env\.VORTEX_BROWSER_ONLY/);
+  assert.match(agent, /username !== 'vortex-browser'/);
+  assert.match(agent, /if \(VORTEX_BROWSER_ONLY\) desired = desired\.filter\(/);
+  assert.match(agent, /d\?\.name === "chrome-devtools" && d\?\.template === "chrome-devtools"/);
+  assert.match(agent, /if \(!RACINES_READER_ONLY && !VORTEX_BROWSER_ONLY\) await startBuiltin\(\);/);
+  assert.match(agent, /process\.getuid\?\.\(\) === 0/);
+});
+
+test('Debian Chromium is a fixed opt-in executable with fail-closed availability', () => {
+  const chromiumInstalled = process.platform === 'linux' && fs.existsSync('/usr/bin/chromium');
+  const config = spec({ debianChromium: true, headless: true });
+  if (!chromiumInstalled) {
+    assert.throws(() => resolveBackend(config, {}), /Debian Chromium requires installed/);
+  } else {
+    const b = resolveBackend(config, {});
+    assert.ok(b.command.includes('--executablePath=/usr/bin/chromium'));
+    assert.ok(b.command.includes('--headless'));
+    assert.ok(!b.command.some(x => /^--no-sandbox/.test(x)));
+  }
+  const ordinary = resolveBackend(spec(), {});
+  assert.ok(!ordinary.command.some(x => x.startsWith('--executablePath=')));
+  const param = CATALOG['chrome-devtools'].params.find(x => x.key === 'debianChromium');
+  assert.equal(param?.default, false);
 });
