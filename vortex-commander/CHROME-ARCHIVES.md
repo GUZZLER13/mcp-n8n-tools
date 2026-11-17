@@ -1,6 +1,20 @@
-# VORTEX Commander — Chrome dédié aux archives (déploiement progressif)
+# VORTEX Commander — navigateur universel Chrome (déploiement progressif)
 
-**Périmètre :** une fonctionnalité native de la passerelle MCP existante, pas un second VORTEX ni un service web supplémentaire. Code source : `vortex-commander/patch-upstream.mjs`. La configuration opt-in ne modifie pas le navigateur personnel.
+**Périmètre :** une fonctionnalité native de la passerelle MCP existante utilisable pour **tous les sites web autorisés** (archives, démarches, portails, QA, support, applications personnelles), pas un second VORTEX ni un service web supplémentaire. Code source : `vortex-commander/patch-upstream.mjs`. La configuration opt-in ne modifie pas le navigateur personnel.
+
+## Ce que le navigateur pourra faire
+
+- **Rechercher** sur les sites web, utiliser les filtres et ouvrir les résultats.
+- **Compléter des démarches autorisées** : se connecter avec une session existante, remplir des formulaires, consulter leurs résultats. Toujours obtenir un accord explicite avant une soumission ayant des effets (achats, modifications de compte, suppression, publication, envoi).
+- **Aider au développement** : reproduire des erreurs visuelles, inspecter le DOM, réaliser des captures et documenter les régressions (l'évaluation de JavaScript arbitraire reste désactivée par défaut).
+- **Assister RACINES** : naviguer dans les archives, récupérer les références et notes de provenance ; l'enregistrement des résultats dans RACINES reste à raccorder et à tester.
+- **Accompagner la famille** : chaque appareil dispose de son propre profil dédié et de droits explicites ; ne pas réutiliser les identifiants personnels d'un autre membre.
+
+### Navigation fiable et non intrusive
+
+Les appels Chrome DevTools sont sérialisés dans l'agent pour éviter deux manipulations de page simultanées. Un espacement minimal de **2,5 secondes entre le début de deux navigations** évite les rafales accidentelles. Ce n'est ni une garantie de non-détection ni une limite globale du trafic chargé par les pages ; les règles de chaque site peuvent exiger plus de retenue. Aucune rotation d'IP, falsification d'empreinte, résolution automatisée de CAPTCHA ou modification furtive du navigateur n'est incluse.
+
+**Parcours utilisateur idéal :** demander une mission, vérifier le site et les autorisations, naviguer, sauvegarder URL/captures/notes selon le contexte, s'interrompre sur les obstacles et demander votre intervention. Le *journal de missions par site*, les *points de reprise persistants* et une *interface de suivi dans VORTEX* sont des évolutions proposées et **ne sont pas encore implémentées** dans cette PR.
 
 ## Choix techniques (17 novembre 2026)
 
@@ -8,12 +22,12 @@
 - Par défaut, le navigateur est **éphémère** (`--isolated`).
 - L'option console `persistent: true` démarre Chrome avec `--user-data-dir=<HOME>/.local/share/vortex-commander/chrome-profile`. Chaque compte OS et appareil dispose ainsi d'un profil distinct ; celui-ci conserve localement des cookies et des sessions que les sites n'ont pas révoqués.
 - `autoConnect` n'est plus proposé, afin d'éviter de rattacher par erreur l'agent aux comptes du navigateur personnel.
-- Les outils d'évaluation JavaScript et d'upload restent désactivés par défaut. L'accès direct au répertoire de profil est également bloqué par la politique de l'agent. **Ce blocage de chemins ne constitue pas une sandbox face à un outil terminal autorisé** ; les permissions OS, les autorisations MCP et un compte OS dédié restent indispensables.
+- Les outils d'évaluation JavaScript et d'upload restent désactivés par défaut. En complément, le serveur démarre avec les options de réduction d'exposition (`--no-javascript-evaluation`, `--redact-network-headers`, `--no-usage-statistics`, `--no-performance-crux`). L'accès direct au répertoire de profil est également bloqué par la politique de l'agent. **Ce blocage de chemins ne constitue pas une sandbox face à un outil terminal autorisé** ; les permissions OS, les autorisations MCP et un compte OS dédié restent indispensables.
 - Aucun identifiant, cookie, mot de passe, token ou profil navigateur ne va dans GitHub, dans les journaux ou dans une conversation.
 
 Sources : [Chrome DevTools — configuration](https://developer.chrome.com/docs/devtools/agents/get-started/configuration/) ; [Chrome DevTools MCP — releases](https://github.com/ChromeDevTools/chrome-devtools-mcp/releases).
 
-## Première connexion humaine
+## Première connexion humaine (pour les sites qui nécessitent un compte)
 
 1. Choisir une machine autorisée dotée de Chrome et d'une session graphique, de préférence un **compte OS dédié**. Éviter le navigateur personnel et ne pas utiliser le VPS en tant que navigateur grand public sans nécessité.
 2. Valider d'abord les tests GitHub et mettre à jour l'agent concerné de manière contrôlée, avec retour arrière possible. La passerelle peut continuer à servir les autres appareils.
