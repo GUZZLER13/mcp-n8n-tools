@@ -87,6 +87,18 @@ case "$mode" in
     [ -f "$SCRIPT_DIR/audit-browser-agent-archive.mjs" ] &&
       [ ! -L "$SCRIPT_DIR/audit-browser-agent-archive.mjs" ] ||
       fail 'Reviewed archive audit script unavailable'
+    # This JS runs as the operator; NEVER execute it from a user-writable
+    # checkout. Validate every path component up to / before invocation.
+    audit_file="$SCRIPT_DIR/audit-browser-agent-archive.mjs"
+    current="$audit_file"
+    while :; do
+      [ ! -L "$current" ] &&
+        [ "$(stat -c %u "$current")" -eq 0 ] &&
+        [ -z "$(find "$current" -maxdepth 0 -perm /022 -print -quit)" ] ||
+        fail 'Archive auditor path must be root-owned and non-writable by others'
+      [ "$current" = / ] && break
+      current=$(dirname -- "$current")
+    done
     /usr/bin/node "$SCRIPT_DIR/audit-browser-agent-archive.mjs" "$bundle" "$5" ||
       fail 'Browser archive failed independent structural audit'
     stage=$(mktemp -d /opt/.vortex-browser-agent-stage.XXXXXXXX) ||
