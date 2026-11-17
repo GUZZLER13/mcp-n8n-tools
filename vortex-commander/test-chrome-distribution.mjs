@@ -43,13 +43,14 @@ test('actual CLI argument parser enables redaction and disables JavaScript evalu
   const options = new ConfigParser('1.13.0', [
     process.execPath, cli,
     '--headless', '--isolated', '--executablePath=/usr/bin/chromium',
-    '--no-javascript-evaluation', '--redact-network-headers',
+    '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',
     '--no-usage-statistics', '--no-performance-crux',
   ], {...process.env, HOME: process.env.HOME || '/tmp'}, false).parse();
   assert.equal(options.headless, true);
   assert.equal(options.isolated, true);
   assert.equal(options.executablePath, '/usr/bin/chromium');
   assert.equal(options.javascriptEvaluation, false);
+  assert.equal(options.fileNavigations, false);
   assert.equal(options.redactNetworkHeaders, true);
   assert.equal(options.usageStatistics, false);
   assert.equal(options.performanceCrux, false);
