@@ -45,6 +45,7 @@ test('rejects untrusted or incomplete existing staged trees without npm overwrit
   assert.match(source, /-perm \/022/);
   assert.match(source, /sha256sum/);
   assert.match(source, /chrome-devtools-mcp@1\.13\.0/);
+  assert.match(source, /--no-bin-links/);
   assert.match(source, /Existing staging lacks its dedicated user/);
   assert.match(source, /Existing browser home is missing or unsafe/);
 });
