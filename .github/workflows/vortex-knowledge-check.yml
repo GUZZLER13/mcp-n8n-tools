@@ -1,0 +1,61 @@
+name: VORTEX Knowledge - read-only and performance
+on:
+  pull_request:
+    paths:
+      - 'vortex-commander/knowledge/**'
+      - 'vortex-commander/patch-upstream.mjs'
+      - '.github/workflows/vortex-knowledge-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vortex-knowledge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  knowledge:
+    name: Knowledge isolation and performance checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pure parser, cache and performance tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in vortex-commander/knowledge/*.mjs; do
+            node --check "$file"
+          done
+          node --test vortex-commander/knowledge/test-knowledge-caddy.mjs \
+            vortex-commander/knowledge/test-knowledge-performance.mjs
+      - uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - name: Patch pinned upstream and ensure no network/privileged discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          node vortex-commander/patch-upstream.mjs upstream
+          test -f upstream/agent/knowledge-mcp.mjs
+          test -f upstream/agent/knowledge-catalog.mjs
+          test -f upstream/agent/knowledge-cache.mjs
+          grep -q 'VORTEX_KNOWLEDGE_ENABLED' upstream/agent/agent.js
+          test "$(grep -c "const PASS_ENV" upstream/agent/agent.js)" -eq 1
+      - name: Start actual Knowledge MCP stdio and verify permission gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp vortex-commander/knowledge/test-knowledge-backend.mjs upstream/test/vortex-knowledge.test.js
+          cd upstream
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test test/vortex-knowledge.test.js
