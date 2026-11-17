@@ -55,3 +55,20 @@ test('never initiates staging on a different OS', { skip: process.platform !== '
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /STAGING_REFUSED:/);
 });
+
+test('systemd browser agent service remains unprivileged, isolated and not automatically activated', () => {
+  const unit = fs.readFileSync(path.resolve('vortex-commander/vortex-browser-agent.service.in'), 'utf8');
+  assert.match(unit, /^User=vortex-browser$/m);
+  assert.match(unit, /^Group=vortex-browser$/m);
+  assert.match(unit, /^Environment=VORTEX_BROWSER_ONLY=true$/m);
+  assert.match(unit, /^NoNewPrivileges=true$/m);
+  assert.match(unit, /^ProtectSystem=strict$/m);
+  assert.match(unit, /^ProtectHome=true$/m);
+  assert.match(unit, /^ReadWritePaths=\/var\/lib\/vortex-browser$/m);
+  assert.match(unit, /^CapabilityBoundingSet=$/m);
+  assert.match(unit, /^ConditionPathExists=\/var\/lib\/vortex-browser\/\.config\/remote-mcp\/device\.json$/m);
+  assert.match(unit, /^ExecStart=\/opt\/vortex-browser-mcp\/bin\/node /m);
+  assert.match(unit, /^MemoryMax=4G$/m);
+  assert.doesNotMatch(unit, /^(?:ExecStartPre=.*(?:npm install|chown|useradd)|User=root|Environment=.*(?:SECRET|TOKEN))$/mi);
+  assert.doesNotMatch(source, /systemctl (?:enable|start|restart)/);
+});
