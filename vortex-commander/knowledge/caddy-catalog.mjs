@@ -1,6 +1,8 @@
 // Caddy-first, read-only architecture discovery. No secrets or Caddy config
 // contents leave the host: return only allowlisted host/path/handler/loopback target.
-import {execFileSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+const execFileAsync=promisify(execFile);
 
 const CADDY = '/usr/bin/caddy';
 const CONFIG = '/etc/caddy/Caddyfile';
@@ -82,15 +84,15 @@ export function catalogFromAdapted(config, observedAt = new Date().toISOString()
   };
 }
 
-export function captureCaddy() {
+export async function captureCaddy() {
   if (process.platform !== 'linux') throw Error('CADDY_LINUX_REQUIRED');
-  // No shell, network, env-provided file, untrusted adapter or raw config export.
-  // Fixed trusted executable and file; never print stderr (may contain secrets).
-  const raw = execFileSync(CADDY, ['adapt','--config',CONFIG,'--adapter','caddyfile'], {
-    encoding:'utf8', timeout:15000, maxBuffer:8*1024*1024,
-    stdio:['ignore','pipe','pipe']
-  });
-  return catalogFromAdapted(JSON.parse(raw));
+  // Separate LOW-PRIORITY process: never block the gateway or this MCP event
+  // loop. No shell, no network, no user-controlled config path or arguments.
+  // Limit worst-case cold-start latency and stdout; do not report stderr.
+  const {stdout} = await execFileAsync('/usr/bin/nice',
+    ['-n','15',CADDY,'adapt','--config',CONFIG,'--adapter','caddyfile'],
+    {encoding:'utf8',timeout:3500,maxBuffer:4*1024*1024});
+  return catalogFromAdapted(JSON.parse(stdout));
 }
 
 export function summarizeDomain(catalog, domain) {
