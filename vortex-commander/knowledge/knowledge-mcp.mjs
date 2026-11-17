@@ -5,12 +5,17 @@ import {Server} from '@modelcontextprotocol/sdk/server/index.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {ListToolsRequestSchema, CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
 import {captureCaddy, summarizeDomain} from './knowledge-catalog.mjs';
+import {createInventoryCache} from './knowledge-cache.mjs';
 
 if (process.platform !== 'linux' || process.getuid?.() === 0 ||
     process.env.VORTEX_KNOWLEDGE_ENABLED !== 'true') {
   console.error('KNOWLEDGE_DISABLED_LOCAL_OPT_IN_REQUIRED');
   process.exit(1);
 }
+
+// No cron, no polling and no gateway hooks. Caddy runs only on the first
+// Knowledge query or after expiration of the 15-minute cache.
+const cache=createInventoryCache(captureCaddy);
 
 const backend = new Server({name:'vortex-knowledge',version:'0.1.0'},
   {capabilities:{tools:{}}});
@@ -34,11 +39,11 @@ backend.setRequestHandler(CallToolRequestSchema, async request => {
       throw Error('INVALID_ARGUMENTS');
     if (name==='inspect_domain' && (typeof args.domain!=='string' || args.domain.length>253))
       throw Error('INVALID_DOMAIN');
-    const data=captureCaddy();
+    const {inventory:data,freshness}=await cache.get();
     const response=name==='list_domains'
       ? {schemaVersion:data.schemaVersion,source:data.source,observedAt:data.observedAt,
-         confidence:data.confidence,count:data.domains.length,domains:data.domains}
-      : summarizeDomain(data,args.domain);
+         confidence:data.confidence,freshness,count:data.domains.length,domains:data.domains}
+      : {...summarizeDomain(data,args.domain),freshness};
     return {content:[{type:'text',text:JSON.stringify(response)}]};
   } catch {
     // Caddy diagnostics can include filesystem snippets: never relay exception details.
