@@ -15,18 +15,13 @@ check_host() {
   [ -r /etc/os-release ] || fail 'OS identification unavailable'
   grep -qx 'ID=debian' /etc/os-release || fail 'Debian required'
   grep -Eq '^VERSION_ID="?13"?$' /etc/os-release || fail 'Debian 13 required'
-  # Never execute the source runtime before validating its provenance.
-  # A malicious replacement could otherwise run with operator privileges.
-  for component in /opt /opt/vortex-commander-nas /opt/vortex-commander-nas/bin "$SOURCE_NODE"; do
-    [ ! -L "$component" ] || fail 'Node source path contains a symlink'
-    [ "$(stat -c %u "$component")" -eq 0 ] || fail 'Node source path is not root-owned'
-    [ -z "$(find "$component" -maxdepth 0 -perm /022 -print -quit)" ] ||
-      fail 'Node source path is group/other writable'
-  done
-  [ -f "$SOURCE_NODE" ] && [ -x "$SOURCE_NODE" ] || fail 'Node 22 source missing'
+  # The existing Node source belongs to the existing NAS agent's account.
+  # It is NOT safe to execute it as root. Hash it only; it will be copied
+  # under a root-owned prefix and then verified again before any execution.
+  [ -f "$SOURCE_NODE" ] && [ -x "$SOURCE_NODE" ] && [ ! -L "$SOURCE_NODE" ] ||
+    fail 'Node 22 source missing or unexpected symlink'
   [ "$(sha256sum "$SOURCE_NODE" | cut -d ' ' -f1)" = "$EXPECTED_NODE_SHA" ] ||
     fail 'Node 22 source fingerprint changed; review provenance'
-  [ "$("$SOURCE_NODE" --version)" = v22.23.3 ] || fail 'Node 22 source version changed'
   [ -x /usr/bin/node ] && [ -x /usr/bin/npm ] || fail 'Debian npm and Node required'
 }
 check_receipt() {
@@ -127,6 +122,15 @@ case "$mode" in
     if [ ! -e "$PREFIX/bin/node" ]; then
       install -o root -g root -m 0755 "$SOURCE_NODE" "$PREFIX/bin/node"
     fi
+    # Verify the PRIVATE copy after copying: this closes the source-file
+    # replacement race without executing the mutable existing NAS binary.
+    [ -f "$PREFIX/bin/node" ] && [ ! -L "$PREFIX/bin/node" ] &&
+      [ "$(stat -c %u "$PREFIX/bin/node")" -eq 0 ] &&
+      [ -z "$(find "$PREFIX/bin/node" -maxdepth 0 -perm /022 -print -quit)" ] &&
+      [ "$(sha256sum "$PREFIX/bin/node" | cut -d ' ' -f1)" = "$EXPECTED_NODE_SHA" ] ||
+      fail 'Copied Node runtime is not a trusted, root-owned binary'
+    [ "$("$PREFIX/bin/node" --version)" = v22.23.3 ] ||
+      fail 'Copied Node version differs from tested runtime'
     # Debian Node 20.19 + root-owned npm are used only to preinstall the
     # pinned Chrome MCP package. The VORTEX agent uses copied Node 22.
     /usr/bin/npm install --prefix "$PREFIX" --ignore-scripts --no-audit \
