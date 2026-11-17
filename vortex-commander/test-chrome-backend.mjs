@@ -99,3 +99,24 @@ test('Debian Chromium is a fixed opt-in executable with fail-closed availability
   const param = CATALOG['chrome-devtools'].params.find(x => x.key === 'debianChromium');
   assert.equal(param?.default, false);
 });
+
+test('browser-only fast path requires preinstalled pinned Chrome and avoids npx at startup', () => {
+  const old = process.env.VORTEX_BROWSER_ONLY;
+  process.env.VORTEX_BROWSER_ONLY = 'true';
+  try {
+    const root = path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-backend', 'node_modules', 'chrome-devtools-mcp');
+    const manifest = path.join(root, 'package.json');
+    const cli = path.join(root, 'out', 'Default', 'gen', 'src', 'bin', 'chrome-devtools-mcp.js');
+    const ready = fs.existsSync(manifest) && fs.existsSync(cli) && JSON.parse(fs.readFileSync(manifest, 'utf8')).version === '1.13.0';
+    if (ready) {
+      const cmd = resolveBackend(spec({ headless: true }), {}).command;
+      assert.deepEqual(cmd.slice(0, 2), [process.execPath, cli]);
+      assert.ok(!cmd.includes('npx'));
+    } else {
+      assert.throws(() => resolveBackend(spec(), {}), /Pinned Chrome DevTools 1.13.0 must be preinstalled/);
+    }
+  } finally {
+    if (old === undefined) delete process.env.VORTEX_BROWSER_ONLY;
+    else process.env.VORTEX_BROWSER_ONLY = old;
+  }
+});
