@@ -89,6 +89,300 @@ jobs:
           grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
           ! grep -q '@latest' agent/agent.js
 
+      - name: Build browser-only agent bundle for operator review (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash vortex-commander/build-nas-browser-agent-bundle.sh upstream \
+            "$RUNNER_TEMP/vortex-browser-agent.tar.gz"
+          tar -tzf "$RUNNER_TEMP/vortex-browser-agent.tar.gz" | grep -q '^agent/agent.js
+        shell: bash
+        run: |
+          npm install --prefix "$HOME/.local/share/vortex-commander/backend" \
+            --ignore-scripts --no-audit --no-fund --save-exact \
+            '@wonderwhy-er/desktop-commander@0.3.3'
+          npm pkg set --prefix "$HOME/.local/share/vortex-commander/backend" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1
+          npm install --prefix "$HOME/.local/share/vortex-commander/backend" --ignore-scripts --no-audit --no-fund
+      - name: Audit production dependency vulnerabilities (informational)
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend="$HOME/.local/share/vortex-commander/backend"
+          report="$RUNNER_TEMP/vortex-npm-audit.json"
+          npm audit --prefix "$backend" --omit=dev --json > "$report" || true
+          node - "$report" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          let report;
+          try { report = JSON.parse(fs.readFileSync(file, 'utf8')); }
+          catch (e) { console.log('::warning::npm audit report unavailable: ' + e.message); process.exit(0); }
+          if (report.error) { console.log('::warning::npm audit could not complete: ' + String(report.error.summary || report.error.code)); process.exit(0); }
+          const counts = report.metadata && report.metadata.vulnerabilities;
+          if (!counts) { console.log('::warning::npm audit returned no vulnerability summary'); process.exit(0); }
+          console.log('VORTEX pinned backend npm audit: ' + JSON.stringify(counts));
+          const findings = Object.entries(report.vulnerabilities || {});
+          for (const [name, item] of findings) {
+            if (!['high', 'critical', 'moderate'].includes(item.severity)) continue;
+            const via = (item.via || []).map(v => typeof v === 'string' ? v : ({title:v.title,range:v.range,url:v.url})).slice(0,5);
+            const finding = {name,severity:item.severity,isDirect:item.isDirect,range:item.range,fixAvailable:item.fixAvailable,via};
+            console.log('VORTEX npm advisory detail: ' + JSON.stringify(finding));
+          }
+          if ((counts.critical || 0) + (counts.high || 0) > 0)
+            console.log('::warning::High/critical production advisories exist; review before VPS deployment.');
+          NODE
+      - name: Authenticated HTTP gateway to real agent read/write smoke
+        shell: bash
+        run: |
+          cp vortex-commander/test-gateway-e2e.mjs upstream/test/vortex-gateway-e2e.test.js
+          cd upstream
+          node --test test/vortex-gateway-e2e.test.js
+
+  windows:
+    name: Windows policy and real Desktop Commander MCP startup
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply overlay and parse PowerShell installer
+        shell: pwsh
+        run: |
+          node vortex-commander/patch-upstream.mjs upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          node --test vortex-commander/test-chrome-backend.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Chrome backend contract failed' }
+          node --test vortex-commander/test-preserve-existing-dc.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Existing Desktop Commander config preservation regression' }
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-agent.ps1').Path,
+            [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "PowerShell parse errors: $parseErrors" }
+          $tokens = $null
+          $preflightErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/preflight-windows.ps1').Path,
+            [ref]$tokens, [ref]$preflightErrors) | Out-Null
+          if ($preflightErrors.Count -ne 0) { throw "Windows preflight parser errors: $preflightErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/preflight-windows.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows preflight failed' }
+          $tokens = $null
+          $watchdogErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-watchdog.ps1').Path,
+            [ref]$tokens, [ref]$watchdogErrors) | Out-Null
+          if ($watchdogErrors.Count -ne 0) { throw "Windows watchdog parser errors: $watchdogErrors" }
+          $tokens = $null
+          $assistantErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/pc-assistant.ps1').Path,
+            [ref]$tokens, [ref]$assistantErrors) | Out-Null
+          if ($assistantErrors.Count -ne 0) { throw "PC assistant parser errors: $assistantErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/pc-assistant.ps1' -Action Local
+          if ($LASTEXITCODE -ne 0) { throw 'PC assistant local diagnostic failed' }
+      - name: Install source dependencies without lifecycle scripts
+        working-directory: upstream
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify Windows denied paths policy
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-windows-policy.mjs' 'upstream/test/vortex-policy.test.js'
+          Push-Location upstream
+          try {
+            node --test test/policy.test.js test/vortex-policy.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows policy regression failed' }
+          } finally { Pop-Location }
+      - name: Install pinned local Desktop Commander without postinstall
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:LOCALAPPDATA 'VortexCommander\backend'
+          npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
+          if ($LASTEXITCODE -ne 0) { throw 'Backend install failed' }
+          npm.cmd pkg set --prefix $prefix 'overrides.node-forge=1.4.3' 'overrides.exceljs.uuid=11.1.1'
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency override failed' }
+          npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Backend dependency update failed' }
+      - name: Test real Windows HTTP gateway and agent file operations
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-e2e.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows full gateway-to-agent test failed' }
+          } finally { Pop-Location }
+
+      - name: Start actual MCP stdio backend on Windows
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-backend-smoke.mjs' 'upstream/test/vortex-backend.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-backend.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander backend startup failed' }
+          } finally { Pop-Location }
+
+          tar -tzf "$RUNNER_TEMP/vortex-browser-agent.tar.gz" | grep -q '^agent/backends.js
+        shell: bash
+        run: |
+          npm install --prefix "$HOME/.local/share/vortex-commander/backend" \
+            --ignore-scripts --no-audit --no-fund --save-exact \
+            '@wonderwhy-er/desktop-commander@0.3.3'
+          npm pkg set --prefix "$HOME/.local/share/vortex-commander/backend" overrides.node-forge=1.4.3 overrides.exceljs.uuid=11.1.1
+          npm install --prefix "$HOME/.local/share/vortex-commander/backend" --ignore-scripts --no-audit --no-fund
+      - name: Audit production dependency vulnerabilities (informational)
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend="$HOME/.local/share/vortex-commander/backend"
+          report="$RUNNER_TEMP/vortex-npm-audit.json"
+          npm audit --prefix "$backend" --omit=dev --json > "$report" || true
+          node - "$report" <<'NODE'
+          const fs = require('node:fs');
+          const file = process.argv[2];
+          let report;
+          try { report = JSON.parse(fs.readFileSync(file, 'utf8')); }
+          catch (e) { console.log('::warning::npm audit report unavailable: ' + e.message); process.exit(0); }
+          if (report.error) { console.log('::warning::npm audit could not complete: ' + String(report.error.summary || report.error.code)); process.exit(0); }
+          const counts = report.metadata && report.metadata.vulnerabilities;
+          if (!counts) { console.log('::warning::npm audit returned no vulnerability summary'); process.exit(0); }
+          console.log('VORTEX pinned backend npm audit: ' + JSON.stringify(counts));
+          const findings = Object.entries(report.vulnerabilities || {});
+          for (const [name, item] of findings) {
+            if (!['high', 'critical', 'moderate'].includes(item.severity)) continue;
+            const via = (item.via || []).map(v => typeof v === 'string' ? v : ({title:v.title,range:v.range,url:v.url})).slice(0,5);
+            const finding = {name,severity:item.severity,isDirect:item.isDirect,range:item.range,fixAvailable:item.fixAvailable,via};
+            console.log('VORTEX npm advisory detail: ' + JSON.stringify(finding));
+          }
+          if ((counts.critical || 0) + (counts.high || 0) > 0)
+            console.log('::warning::High/critical production advisories exist; review before VPS deployment.');
+          NODE
+      - name: Authenticated HTTP gateway to real agent read/write smoke
+        shell: bash
+        run: |
+          cp vortex-commander/test-gateway-e2e.mjs upstream/test/vortex-gateway-e2e.test.js
+          cd upstream
+          node --test test/vortex-gateway-e2e.test.js
+
+  windows:
+    name: Windows policy and real Desktop Commander MCP startup
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: andyching168/SelfHostDesktopMCP
+          ref: 0d67f39aef13ce8253e9a2b7a376e9799a465d22
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply overlay and parse PowerShell installer
+        shell: pwsh
+        run: |
+          node vortex-commander/patch-upstream.mjs upstream
+          if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          node --test vortex-commander/test-chrome-backend.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Chrome backend contract failed' }
+          node --test vortex-commander/test-preserve-existing-dc.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Existing Desktop Commander config preservation regression' }
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-agent.ps1').Path,
+            [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "PowerShell parse errors: $parseErrors" }
+          $tokens = $null
+          $preflightErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/preflight-windows.ps1').Path,
+            [ref]$tokens, [ref]$preflightErrors) | Out-Null
+          if ($preflightErrors.Count -ne 0) { throw "Windows preflight parser errors: $preflightErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/preflight-windows.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows preflight failed' }
+          $tokens = $null
+          $watchdogErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/windows-watchdog.ps1').Path,
+            [ref]$tokens, [ref]$watchdogErrors) | Out-Null
+          if ($watchdogErrors.Count -ne 0) { throw "Windows watchdog parser errors: $watchdogErrors" }
+          $tokens = $null
+          $assistantErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'vortex-commander/pc-assistant.ps1').Path,
+            [ref]$tokens, [ref]$assistantErrors) | Out-Null
+          if ($assistantErrors.Count -ne 0) { throw "PC assistant parser errors: $assistantErrors" }
+          & powershell.exe -NoProfile -File 'vortex-commander/pc-assistant.ps1' -Action Local
+          if ($LASTEXITCODE -ne 0) { throw 'PC assistant local diagnostic failed' }
+      - name: Install source dependencies without lifecycle scripts
+        working-directory: upstream
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify Windows denied paths policy
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-windows-policy.mjs' 'upstream/test/vortex-policy.test.js'
+          Push-Location upstream
+          try {
+            node --test test/policy.test.js test/vortex-policy.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows policy regression failed' }
+          } finally { Pop-Location }
+      - name: Install pinned local Desktop Commander without postinstall
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:LOCALAPPDATA 'VortexCommander\backend'
+          npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund --save-exact '@wonderwhy-er/desktop-commander@0.3.3'
+          if ($LASTEXITCODE -ne 0) { throw 'Backend install failed' }
+          npm.cmd pkg set --prefix $prefix 'overrides.node-forge=1.4.3' 'overrides.exceljs.uuid=11.1.1'
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency override failed' }
+          npm.cmd install --prefix $prefix --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Backend dependency update failed' }
+      - name: Test real Windows HTTP gateway and agent file operations
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-e2e.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows full gateway-to-agent test failed' }
+          } finally { Pop-Location }
+
+      - name: Start actual MCP stdio backend on Windows
+        shell: pwsh
+        run: |
+          Copy-Item 'vortex-commander/test-backend-smoke.mjs' 'upstream/test/vortex-backend.test.js'
+          Push-Location upstream
+          try {
+            node --test test/vortex-backend.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander backend startup failed' }
+          } finally { Pop-Location }
+
+          tar -tzf "$RUNNER_TEMP/vortex-browser-agent.tar.gz" | grep -q '^node_modules/ws/'
+          sha256sum -c "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256"
+      - name: Archive isolated browser agent for later approved staging
+        uses: actions/upload-artifact@v4
+        with:
+          name: vortex-browser-agent-candidate
+          path: |
+            ${{ runner.temp }}/vortex-browser-agent.tar.gz
+            ${{ runner.temp }}/vortex-browser-agent.tar.gz.sha256
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Install pinned local Desktop Commander for end-to-end gateway test
         shell: bash
         run: |
