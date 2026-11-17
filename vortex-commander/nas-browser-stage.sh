@@ -80,6 +80,14 @@ case "$mode" in
       /usr/bin/node -e "const fs=require('node:fs');if(JSON.parse(fs.readFileSync('$manifest','utf8')).version!=='1.13.0')process.exit(1)" ||
         fail 'Existing Chrome MCP has unexpected version'
       [ -x /usr/bin/chromium ] || fail 'Existing staging requires installed Chromium'
+      id -u vortex-browser >/dev/null 2>&1 || fail 'Existing staging lacks its dedicated user'
+      [ "$(id -u vortex-browser)" -ne 0 ] || fail 'Browser account cannot be root'
+      [ "$(getent passwd vortex-browser | cut -d : -f6)" = "$BROWSER_HOME" ] ||
+        fail 'Existing browser identity has unexpected home'
+      [ -d "$BROWSER_HOME" ] && [ ! -L "$BROWSER_HOME" ] &&
+        [ "$(stat -c %U "$BROWSER_HOME")" = vortex-browser ] &&
+        [ "$(stat -c %a "$BROWSER_HOME")" = 700 ] ||
+        fail 'Existing browser home is missing or unsafe'
       printf 'ALREADY_STAGED_NOT_ACTIVATED=yes\n'
       exit 0
     fi
