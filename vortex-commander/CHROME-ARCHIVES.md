@@ -92,3 +92,28 @@ Le contrôle a été réalisé par VORTEX Commander sur `pc-nas`, avec la comman
 - Préserver la possibilité de désactiver uniquement le backend Chrome et de revenir à la version antérieure de l'agent, sans effacer automatiquement ses profils.
 
 **État à l'issue de l'audit :** préparation et diagnostic seulement ; aucun navigateur installé, aucune modification du service NAS, aucune preuve de déploiement Chrome en production.
+
+## Démarrage accéléré du navigateur NAS (branche, non déployé)
+
+Le mode `VORTEX_BROWSER_ONLY=true` est réservé à un **agent séparé** tournant sous le compte Linux non privilégié `vortex-browser`. Il refuse de démarrer sous un autre compte (ou root), ne démarre pas Desktop Commander et accepte exclusivement le backend Chrome autorisé. Aucun accès aux outils `racines_*` n'y est ajouté.
+
+Pour éviter une résolution `npx` et un téléchargement npm au **démarrage** de ce backend, le mode isolé lance directement le JavaScript installé de `chrome-devtools-mcp@1.13.0` avec `process.execPath`. Il exige la présence et la version exacte du paquet dans le HOME du compte dédié :
+
+- Racine : `~/.local/share/vortex-commander/chrome-backend/`
+- Paquet : `node_modules/chrome-devtools-mcp/`
+- Entrée : `out/Default/gen/src/bin/chrome-devtools-mcp.js`
+
+**Provisionnement futur, uniquement après le contrôle de sauvegarde/restauration VORTEX et la création du compte dédié par un opérateur habilité :**
+
+```sh
+# À exécuter dans une session du compte vortex-browser, pas dans celle de l'agent actuel :
+mkdir -p "$HOME/.local/share/vortex-commander/chrome-backend"
+npm install --prefix "$HOME/.local/share/vortex-commander/chrome-backend" \
+  --ignore-scripts --no-audit --no-fund --save-exact chrome-devtools-mcp@1.13.0
+```
+
+Le paquet est provisionné **une fois**, hors des requêtes ChatGPT ; ne jamais ajouter `npm install` dans la séquence d'une navigation. L'échec de la vérification du paquet empêche le backend de démarrer plutôt que d'utiliser `npx` ou `@latest` en secours. Réviser les chemins et refaire les tests si le paquet officiel change sa structure.
+
+Après activation seulement : configurer le navigateur dédié `headless: true`, `debianChromium: true` pour utiliser le chemin fixe `/usr/bin/chromium`, `persistent: false` au départ. Les sessions authentifiées persistantes et leur interface de connexion humaine demandent un chantier ultérieur séparé.
+
+Mesurer ensuite le démarrage froid, le redémarrage avec backend déjà installé et les navigations à chaud. La vitesse dépend toujours du site et du réseau ; l'objectif est de **supprimer les téléchargements et démarrages superflus**, pas d'affaiblir la protection des comptes.
