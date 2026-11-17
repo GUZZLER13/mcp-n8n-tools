@@ -54,7 +54,37 @@ const envLine = agent.split('\n').find(x => x.startsWith('const PASS_ENV = '));
 if (!envLine) throw new Error('Cannot find child process environment');
 agent = exact(agent, envLine,
   "const PASS_ENV = ['DISPLAY','XAUTHORITY','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','LANG','LC_ALL','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP','SystemRoot','WINDIR','HOMEDRIVE','HOMEPATH','ComSpec','PATHEXT'];");
+// Forward only the fixed local Knowledge opt-in to its child MCP process.
+agent = exact(agent, "const PASS_ENV = ['DISPLAY'", "const PASS_ENV = ['VORTEX_KNOWLEDGE_ENABLED','DISPLAY'");
 put('agent/agent.js', agent);
+
+// Integrate Knowledge in the SAME VORTEX Commander catalog, not as a new gateway.
+// No custom commands, no dynamic file paths and no implied root privileges.
+let knowledgeBackends = get('agent/backends.js');
+knowledgeBackends = exact(knowledgeBackends,
+  '// Catalog of MCP servers the gateway console may ask an agent to run.',
+  "import fs from 'node:fs';\nimport path from 'node:path';\nimport {fileURLToPath} from 'node:url';\n" +
+  '// Catalog of MCP servers the gateway console may ask an agent to run.');
+knowledgeBackends = exact(knowledgeBackends, 'export const CATALOG = {',
+  "export const CATALOG = {\n" +
+  "  knowledge: {title:'VORTEX Knowledge (Caddy, lecture seule)', description:'Discover configured Caddy domains and sanitized local route targets', prefix:'knowledge_', params:[], default_disabled:[]},");
+knowledgeBackends = exact(knowledgeBackends,
+  "  if (template === 'custom') {",
+  "  if (template === 'knowledge') {\n" +
+  "    if (name !== 'knowledge' || Object.keys(params).length) throw Error('Invalid Knowledge options');\n" +
+  "    if (process.platform !== 'linux' || process.getuid?.() === 0 || process.env.VORTEX_KNOWLEDGE_ENABLED !== 'true') throw Error('Knowledge requires a locally authorized unprivileged Linux agent');\n" +
+  "    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'knowledge-mcp.mjs');\n" +
+  "    if (!fs.existsSync(script)) throw Error('Knowledge source not installed');\n" +
+  "    return {name:'knowledge',command:[process.execPath,script],prefix:'knowledge_',defaultDisabled:[]};\n" +
+  "  }\n" +
+  "  if (template === 'custom') {");
+put('agent/backends.js', knowledgeBackends);
+for (const [source, destination] of [
+  ['caddy-catalog.mjs','knowledge-catalog.mjs'],
+  ['knowledge-mcp.mjs','knowledge-mcp.mjs']]) {
+  fs.copyFileSync(path.join(kitDir, 'knowledge', source), path.join(root, 'agent', destination));
+}
+
 
 // The gateway and VPS agent initially talk only over localhost. We do not
 // send device secrets to an old public bridge at the same hostname.
