@@ -55,8 +55,8 @@ test('pinned Chrome MCP starts, navigates a local page and closes cleanly', { ti
 
   const initial = await client.callTool({name: 'list_pages', arguments: {}});
   assert.equal(initial.isError, undefined, 'Cannot inspect initial browser tabs');
-  const tabText = (initial.content ?? []).map(x => x.text ?? '').join('\\n');
-  const tab = tabText.match(/(?:^|\\n)\\s*(\\d+):\\s+/);
+  const tabText = (initial.content ?? []).map(x => x.text ?? '').join('\n');
+  const tab = tabText.match(/(?:^|\n)\s*(\d+):\s+/);
   assert.ok(tab, 'Could not obtain an actual pageId from Chrome: ' + tabText.slice(0,400));
   const pageId = Number(tab[1]);
   const output = await client.callTool({name: 'navigate_page', arguments: {
