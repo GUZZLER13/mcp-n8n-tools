@@ -100,6 +100,9 @@ jobs:
           grep -Fxq 'agent/backends.js' "$RUNNER_TEMP/browser-agent-entries.txt"
           grep -Fq 'node_modules/ws/' "$RUNNER_TEMP/browser-agent-entries.txt"
           sha256sum -c "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256"
+          node vortex-commander/audit-browser-agent-archive.mjs \
+            "$RUNNER_TEMP/vortex-browser-agent.tar.gz" \
+            "$(cut -d ' ' -f1 "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256")"
           echo "Browser candidate SHA256 (compare against artifact):"
           cut -d ' ' -f1 "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256"
       - name: Archive isolated browser agent for later approved staging
