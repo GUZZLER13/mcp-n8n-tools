@@ -67,7 +67,7 @@ browserBackends = exact(browserBackends,
   "      ...(p.headless ? ['--headless'] : []),\n" +
   "    ],");
 browserBackends = exact(browserBackends,
-  "  playwright: {\\n    title: 'Playwright browser',\\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\\n    package: '@playwright/mcp', prefix: 'playwright_',\\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\\n  },\\n",
+  "  playwright: {\n    title: 'Playwright browser',\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\n    package: '@playwright/mcp', prefix: 'playwright_',\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\n  },\n",
   "");
 browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
