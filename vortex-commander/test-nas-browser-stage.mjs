@@ -17,19 +17,19 @@ test('staging shell script parses', () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('trusted Node source is checked before it is executed', () => {
+test('untrusted NAS Node is hashed, never executed before a root-owned copy is verified', () => {
   const start = source.indexOf('check_host() {');
-  const end = source.indexOf('\ncheck_receipt() {', start);
+  const end = source.indexOf('\\ncheck_receipt() {', start);
   const check = source.slice(start, end);
-  const owner = check.indexOf('stat -c %u "$component"');
-  const permissions = check.indexOf('find "$component" -maxdepth 0 -perm /022');
-  const fingerprint = check.indexOf('sha256sum "$SOURCE_NODE"');
-  const execution = check.indexOf('"$SOURCE_NODE" --version');
-  assert.ok(owner > 0 && permissions > owner);
-  assert.ok(fingerprint > permissions && execution > fingerprint,
-    'do not execute an unverified Node binary as the NAS operator');
-  assert.match(check, /\[ ! -L "\$component" \]/);
-  assert.match(check, /\[ -f "\$SOURCE_NODE" \] && \[ -x "\$SOURCE_NODE" \]/);
+  assert.match(check, /sha256sum "\\$SOURCE_NODE"/);
+  assert.match(check, /\\[ ! -L "\\$SOURCE_NODE" \\]/);
+  assert.doesNotMatch(check, /"\\$SOURCE_NODE" --version/);
+  const copy = source.indexOf('install -o root -g root -m 0755 "$SOURCE_NODE" "$PREFIX/bin/node"');
+  const postCopyHash = source.indexOf('sha256sum "$PREFIX/bin/node"', copy);
+  const version = source.indexOf('"$PREFIX/bin/node" --version', copy);
+  assert.ok(copy > 0 && postCopyHash > copy && version > postCopyHash,
+    'Node can only execute after the root-owned copy has been fingerprinted');
+  assert.match(source, /Copied Node runtime is not a trusted, root-owned binary/);
 });
 
 test('check-only path precedes all mutations and reports no gateway changes', () => {
