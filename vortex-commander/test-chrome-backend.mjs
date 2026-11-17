@@ -13,7 +13,7 @@ const { loadPolicy, check } = await import(pathToFileURL(path.join(root, 'policy
 const spec = (params = {}) => ({ template: 'chrome-devtools', params });
 
 test('only Chrome DevTools is offered as a browser template', () => {
-  assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools']);
+  assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools', 'racines']);
   assert.equal(CATALOG['chrome-devtools'].prefix, 'chrome_');
   assert.ok(CATALOG['chrome-devtools'].default_disabled.includes('evaluate_script'));
   assert.ok(CATALOG['chrome-devtools'].default_disabled.includes('upload_file'));
@@ -57,4 +57,24 @@ test('existing device policy denies direct access to saved browser cookies', () 
   assert.match(check(policy, 'read_file', { path: cookies }), /blocked location/);
   assert.match(check(policy, 'write_file', { path: cookies }), /blocked location/);
   assert.equal(check(policy, 'read_file', { path: path.join(os.homedir(), 'note.txt') }), null);
+});
+
+test('RACINES backend uses only a fixed local MCP reader process without a browser session', () => {
+  const config = { template: 'racines', name: 'racines', params: {} };
+  if (process.platform !== 'linux') {
+    assert.throws(() => resolveBackend(config, {}), /Linux service host/);
+    return;
+  }
+  const backend = resolveBackend(config, {});
+  assert.equal(backend.name, 'racines');
+  assert.equal(backend.prefix, 'racines_');
+  assert.deepEqual(backend.defaultDisabled, []);
+  assert.equal(backend.command[0], process.execPath);
+  assert.match(backend.command[1], /racines-mcp\.mjs$/);
+  assert.equal(backend.command.length, 2);
+  assert.ok(!backend.command.some(x => /Bearer|password|token|api[_-]?key/i.test(x)));
+  assert.throws(
+    () => resolveBackend({ template: 'racines', params: { command: '/bin/sh' } }, {}),
+    /invalid RACINES options/
+  );
 });
