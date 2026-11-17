@@ -108,7 +108,9 @@ test('separate browser-agent archive stage keeps backup gate, preserves gateway,
   assert.ok(install.includes('NO_DEVICE_PAIRED=yes'));
   assert.ok(install.includes('An existing browser agent must not be overwritten'));
   assert.ok(install.includes("['-','d'].includes(line[0])"));
-  assert.ok(install.includes("agent\\.js|backends\\.js|policy\\.js"));
+  const audit = install.indexOf('/usr/bin/node "$SCRIPT_DIR/audit-browser-agent-archive.mjs"', rootCheck);
+  assert.ok(audit > digest && audit < extract, 'structural audit precedes extraction');
+  assert.ok(install.includes('agent/browser-session.mjs agent/browser-agent-session.mjs'));
   assert.doesNotMatch(install, /systemctl\s+(?:enable|start|restart)|--no-sandbox|device_secret\s*=/);
 });
 
