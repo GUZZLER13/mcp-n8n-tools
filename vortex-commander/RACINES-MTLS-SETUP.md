@@ -96,6 +96,25 @@ Les pages Web et archives peuvent contenir des instructions hostiles : leur
 contenu reste une donnée non fiable. Il ne doit pas autoriser des actions
 sur les machines ou des mises à jour de filiations.
 
+## Agent VORTEX de lecture : séparation obligatoire
+
+Le backend `racines` est **refusé dans l'agent VORTEX généraliste**. Il ne peut
+être démarré que sur Linux, en mode `VORTEX_RACINES_READER_ONLY=true`, par le
+compte système non privilégié nommé `vortex-racines`.
+
+Cet agent doit disposer de son **propre appareil appairé à la passerelle** et
+d'une configuration privée distincte. Dans ce mode, l'agent **ne lance pas
+Desktop Commander** et ignore les autres backends demandés par la console,
+y compris Chrome ou une commande personnalisée. Le compte `vortex-racines`
+ne doit pas appartenir aux groupes sudo, docker ou administrateurs, ni avoir
+accès aux clés du serveur ou aux sessions humaines.
+
+L'activation exige donc une installation explicite et contrôlée de ce service
+séparé ; définir simplement la variable sur l'agent administratif ne permet
+pas de démarrer le lecteur. Les certificats client restent lisibles uniquement
+par ce compte, avec possibilité de rotation et révocation. **Rien de cela n'est
+déployé à ce stade.**
+
 ## Recette obligatoire
 
 1. Tests SQL authentification et RLS synthétiques verts.
