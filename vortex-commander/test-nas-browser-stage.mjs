@@ -41,7 +41,7 @@ test('rejects untrusted or incomplete existing staged trees without npm overwrit
   assert.match(source, /ALREADY_STAGED_NOT_ACTIVATED=yes/);
   assert.match(source, /Existing staging lacks a complete pinned MCP package/);
   assert.match(source, /Existing Chrome MCP has unexpected version/);
-  assert.match(source, /find \"$PREFIX\" -xdev/);
+  assert.ok(source.includes('find "$PREFIX" -xdev'), 'full tree must be checked for untrusted entries');
   assert.match(source, /-perm \/022/);
   assert.match(source, /sha256sum/);
   assert.match(source, /chrome-devtools-mcp@1\.13\.0/);
