@@ -28,6 +28,11 @@ const modifiedLine = sourceLine.replace('cmd.replace(', 'expandedCommand.replace
 const normalized = '    const normalizedText = process.platform === "win32" ? text.replace(/\\//g, path.sep) : text;';
 policy = exact(policy, sourceLine, [expansion, modifiedLine, normalized].join('\n'));
 policy = exact(policy, 'CASE(text).includes', 'CASE(normalizedText).includes', 2);
+// Browser profiles contain session cookies; deny direct file-tool reads of
+// the dedicated directory. This is defense in depth, not a sandbox for shell.
+policy = exact(policy,
+  "'~/remote-mcp/secrets', '~/remote-mcp/remote-mcp.db'",
+  "'~/remote-mcp/secrets', '~/remote-mcp/remote-mcp.db', '~/.local/share/vortex-commander/chrome-profile'");
 put('agent/policy.js', policy);
 
 // ChatGPT's OAuth integration relies on advertised offline refresh access.
@@ -54,14 +59,19 @@ browserBackends = exact(browserBackends,
 browserBackends = exact(browserBackends,
   "params: [\n      { key: 'autoConnect', label: 'Use my running Chrome (--autoConnect): your real profile and logged-in sessions', type: 'boolean', default: false },\n      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n    ],\n    // --autoConnect attaches to an existing browser, so it replaces --isolated/--headless (which only apply to a browser it launches itself)\n    args: (p) => (p.autoConnect ? ['--autoConnect'] : ['--isolated', ...(p.headless ? ['--headless'] : [])]),",
   "params: [\n" +
-  "      { key: 'autoConnect', label: 'Connect to an existing Chrome session (exposes browser cookies and accounts)', type: 'boolean', default: false },\n" +
-  "      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n" +
+  "      { key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false },\n" +
   "      { key: 'persistent', label: 'Keep dedicated Chrome DevTools session on this device (opt-in)', type: 'boolean', default: false },\n" +
   "    ],\n" +
-  "    args: (p) => p.autoConnect ? ['--autoConnect'] : [\n" +
+  "    args: (p) => [\n" +
   "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
   "      ...(p.headless ? ['--headless'] : []),\n" +
   "    ],");
+browserBackends = exact(browserBackends,
+  "  playwright: {\\n    title: 'Playwright browser',\\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\\n    package: '@playwright/mcp', prefix: 'playwright_',\\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\\n  },\\n",
+  "");
+browserBackends = exact(browserBackends,
+  "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
+  "return { name, command: ['npx', '-y', 'chrome-devtools-mcp@1.13.0', ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };");
 put('agent/backends.js', browserBackends);
 
 let agent = get('agent/agent.js');
