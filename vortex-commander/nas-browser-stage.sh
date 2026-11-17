@@ -15,10 +15,18 @@ check_host() {
   [ -r /etc/os-release ] || fail 'OS identification unavailable'
   grep -qx 'ID=debian' /etc/os-release || fail 'Debian required'
   grep -Eq '^VERSION_ID="?13"?$' /etc/os-release || fail 'Debian 13 required'
-  [ -x "$SOURCE_NODE" ] || fail 'Node 22 source missing'
-  [ "$("$SOURCE_NODE" --version)" = v22.23.3 ] || fail 'Node 22 source version changed'
+  # Never execute the source runtime before validating its provenance.
+  # A malicious replacement could otherwise run with operator privileges.
+  for component in /opt /opt/vortex-commander-nas /opt/vortex-commander-nas/bin "$SOURCE_NODE"; do
+    [ ! -L "$component" ] || fail 'Node source path contains a symlink'
+    [ "$(stat -c %u "$component")" -eq 0 ] || fail 'Node source path is not root-owned'
+    [ -z "$(find "$component" -maxdepth 0 -perm /022 -print -quit)" ] ||
+      fail 'Node source path is group/other writable'
+  done
+  [ -f "$SOURCE_NODE" ] && [ -x "$SOURCE_NODE" ] || fail 'Node 22 source missing'
   [ "$(sha256sum "$SOURCE_NODE" | cut -d ' ' -f1)" = "$EXPECTED_NODE_SHA" ] ||
     fail 'Node 22 source fingerprint changed; review provenance'
+  [ "$("$SOURCE_NODE" --version)" = v22.23.3 ] || fail 'Node 22 source version changed'
   [ -x /usr/bin/node ] && [ -x /usr/bin/npm ] || fail 'Debian npm and Node required'
 }
 check_receipt() {
