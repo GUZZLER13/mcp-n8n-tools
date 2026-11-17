@@ -149,3 +149,13 @@ test('NAS browser process refuses writable code and root-owned runtime is mandat
   assert.match(source, /stat\.isSymbolicLink\(\)/);
   assert.match(source, /Browser runtime must be root-owned/);
 });
+
+test('browser-only agent hard-denies uploads/evaluation even with gateway enabled_tools overrides', () => {
+  const agent = fs.readFileSync(path.join(root, 'agent.js'), 'utf8');
+  assert.match(agent, /if \(VORTEX_BROWSER_ONLY && slot\.name === "chrome-devtools"\)/);
+  assert.match(agent, /on\.delete\("upload_file"\)/);
+  assert.match(agent, /on\.delete\("evaluate_script"\)/);
+  const deny = agent.indexOf('on.delete("upload_file")');
+  const expose = agent.indexOf('for (const t of slot.tools)', deny);
+  assert.ok(deny > 0 && expose > deny, 'denylist must filter before exposed routes are registered');
+});
