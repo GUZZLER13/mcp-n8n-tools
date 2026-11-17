@@ -63,15 +63,25 @@ case "$mode" in
     [ "$(id -u)" -eq 0 ] || fail 'Authorized root operator required'
     check_receipt "$3"
     [ "$(stat -c %u /opt)" -eq 0 ] || fail 'Root-owned /opt required'
-    if [ -e "$PREFIX" ]; then
-      [ -d "$PREFIX" ] && [ ! -L "$PREFIX" ] &&
-        [ "$(stat -c %u "$PREFIX")" -eq 0 ] ||
+    # If staging already exists, never run npm or chown over that tree.
+    # Either recognize a fully trusted installation or fail closed.
+    if [ -e "$PREFIX" ] || [ -L "$PREFIX" ]; then
+      [ -d "$PREFIX" ] && [ ! -L "$PREFIX" ] && [ "$(stat -c %u "$PREFIX")" -eq 0 ] ||
         fail 'Existing browser prefix is not trusted'
-    fi
-    if [ -e "$PREFIX/bin/node" ]; then
-      [ -f "$PREFIX/bin/node" ] && [ ! -L "$PREFIX/bin/node" ] &&
+      [ -x "$PREFIX/bin/node" ] && [ ! -L "$PREFIX/bin/node" ] &&
         [ "$(sha256sum "$PREFIX/bin/node" | cut -d ' ' -f1)" = "$EXPECTED_NODE_SHA" ] ||
-        fail 'An existing browser Node binary must not be overwritten'
+        fail 'Existing staging has an unexpected or missing Node'
+      manifest="$PREFIX/node_modules/chrome-devtools-mcp/package.json"
+      cli="$PREFIX/node_modules/chrome-devtools-mcp/out/Default/gen/src/bin/chrome-devtools-mcp.js"
+      [ -f "$manifest" ] && [ -f "$cli" ] && [ ! -L "$manifest" ] && [ ! -L "$cli" ] ||
+        fail 'Existing staging lacks a complete pinned MCP package'
+      [ -z "$(find "$PREFIX" -xdev \( -type l -o ! -uid 0 -o -perm /022 \) -print -quit)" ] ||
+        fail 'Existing staging contains symlinks, non-root or writable files'
+      /usr/bin/node -e "const fs=require('node:fs');if(JSON.parse(fs.readFileSync('$manifest','utf8')).version!=='1.13.0')process.exit(1)" ||
+        fail 'Existing Chrome MCP has unexpected version'
+      [ -x /usr/bin/chromium ] || fail 'Existing staging requires installed Chromium'
+      printf 'ALREADY_STAGED_NOT_ACTIVATED=yes\n'
+      exit 0
     fi
     # Existing identities must be checked before any package changes.
     if id -u vortex-browser >/dev/null 2>&1; then
