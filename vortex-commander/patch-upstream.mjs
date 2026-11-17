@@ -10,7 +10,7 @@ const root = process.argv[2] && path.resolve(process.argv[2]);
 if (!root || !fs.existsSync(path.join(root, 'agent', 'agent.js'))) {
   throw new Error('Usage: node patch-upstream.mjs /path/to/pinned-SelfHostDesktopMCP');
 }
-const get = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+const get = rel => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 const put = (rel, value) => fs.writeFileSync(path.join(root, rel), value, 'utf8');
 function exact(src, needle, replacement, count = 1) {
   const n = src.split(needle).length - 1;
@@ -65,6 +65,8 @@ browserBackends = exact(browserBackends,
   "    args: (p) => [\n" +
   "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
   "      ...(p.headless ? ['--headless'] : []),\n" +
+  "      '--no-javascript-evaluation', '--redact-network-headers',\n" +
+  "      '--no-usage-statistics', '--no-performance-crux',\n" +
   "    ],");
 browserBackends = exact(browserBackends,
   "  playwright: {\n    title: 'Playwright browser',\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\n    package: '@playwright/mcp', prefix: 'playwright_',\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\n  },\n",
@@ -73,6 +75,27 @@ browserBackends = exact(browserBackends,
   "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
   "return { name, command: ['npx', '-y', 'chrome-devtools-mcp@1.13.0', ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };");
 put('agent/backends.js', browserBackends);
+
+// Keep upstream end-to-end regression coverage while replacing only its old
+// catalog expectations; this overlay intentionally removes automatic access
+// to personal Chrome and Playwright. On upstream drift fail closed.
+let browserTests = get('test/backends.test.js');
+browserTests = exact(browserTests, "'chrome-devtools-mcp@latest'", "'chrome-devtools-mcp@1.13.0'", 2);
+browserTests = exact(browserTests,
+  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless']);",
+  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless', '--no-javascript-evaluation', '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux']);");
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--autoConnect']);",
+  "assert.ok(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command.includes('--isolated'));" );
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: {} }, {}).command.slice(3), ['--isolated'], 'defaults stay isolated');",
+  "assert.ok(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: {} }, {}).command.includes('--isolated'), 'defaults stay isolated');");
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}).command.slice(0, 3), ['npx', '-y', '@playwright/mcp@latest']);",
+  "assert.throws(() => resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}), /unknown template/);");
+browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);",
+  "assert.deepEqual(Object.keys(CATALOG), ['chrome-devtools']);");
+put('test/backends.test.js', browserTests);
 
 let agent = get('agent/agent.js');
 // Never implicitly launch @latest; explicit pinned package setup is required.
