@@ -109,6 +109,26 @@ Pour éviter toute installation npm **au moment d'une demande ChatGPT**, le mode
 
 Le code de résolution Chrome impose que le paquet soit présent **et exactement en version 1.13.0**. Il refuse également les composants du chemin d'exécution qui ne sont pas détenus par root ou qui sont modifiables par le groupe ou les autres utilisateurs. Aucun téléchargement `npx` de secours n'est effectué dans ce mode.
 
+### Procédure préparée, sans installation effectuée
+
+Le script versionné `vortex-commander/nas-browser-stage.sh` automatise la **préparation additive uniquement**. Son lancement sans argument, ou avec `--check`, est un diagnostic en lecture seule. L'activation n'y est **pas** implémentée : aucun appairage, aucun changement de la passerelle ni démarrage de navigateur.
+
+Le mode `--apply`, réservé à un opérateur local autorisé sous root, exige :
+- une preuve récente de vérification `RESTORE_VERIFIED` produite par `state-backup.mjs verify`, conservée dans un fichier JSON privé, appartenant à root (0600) ;
+- une copie chiffrée indépendante effectivement conservée, confirmée explicitement par l'opérateur ;
+- la vérification des autres points de `STATE-PRESERVATION-GATE.md` avant exécution.
+
+Commande opérateur, **à ne pas exécuter tant que ces conditions ne sont pas réunies** :
+
+```sh
+bash vortex-commander/nas-browser-stage.sh --check
+# Après validation de l'ensemble du garde-fou, opérateur root uniquement :
+bash vortex-commander/nas-browser-stage.sh --apply \
+  --receipt /root/restore-verified.json --independent-copy-confirmed
+```
+
+Le script contrôle la version et l'empreinte du Node 22 présent sur le NAS, installe Chromium depuis les dépôts Debian, crée ou réutilise l'identité limitée `vortex-browser`, copie Node sous un chemin protégé et prépare le paquet Chrome DevTools épinglé. Il s'arrête **avant l'enregistrement de l'agent ou sa mise en service**. La vérification du reçu est un garde-fou anti-déploiement accidentel : elle ne remplace pas l'audit de sauvegarde réelle, de la passerelle isolée ou des autres stockages.
+
 ### Provisionnement opérateur après validation complète des sauvegardes
 
 **Ne pas exécuter ces commandes avant la validation de `STATE-PRESERVATION-GATE.md`, incluant la sauvegarde réelle chiffrée, sa copie indépendante et sa restauration isolée.** Elles sont à effectuer uniquement depuis une session système privilégiée habilitée, jamais depuis une page Web ou un outil Chrome.
