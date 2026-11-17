@@ -102,7 +102,7 @@ if(names.length<5 || names.length>35000) process.exit(1);
 for (const name of names) {
   if (!/^[a-zA-Z0-9@._/+~-]+$/.test(name)) process.exit(1);
   if (name.startsWith('/') || name.split('/').some(part=>part==='..'||part==='.')) process.exit(1);
-  if (!/^(agent\/(agent\.js|backends\.js|policy\.js)?|node_modules\/|package\.json$|package-lock\.json$)/.test(name)) process.exit(1);
+  if (!/^(?:agent\/(?:agent\.js|backends\.js|policy\.js)?$|node_modules\/|package\.json$|package-lock\.json$)/.test(name)) process.exit(1);
 }
 NODE
     then
