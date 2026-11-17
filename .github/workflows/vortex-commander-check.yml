@@ -37,6 +37,7 @@ jobs:
           for file in vortex-commander/*.mjs; do node --check "$file"; done
           node --test vortex-commander/test-preserve-existing-dc.mjs
           node --test vortex-commander/test-nas-browser-stage.mjs
+          node --test vortex-commander/test-browser-agent-archive.mjs
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck -S error vortex-commander/*.sh
           fi
