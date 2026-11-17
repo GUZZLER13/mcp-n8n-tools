@@ -42,6 +42,20 @@ oauthSource = exact(oauthSource,
   "refresh_token: refresh, scope: 'mcp offline_access'");
 put('gateway/oauth.js', oauthSource);
 
+// Browser automation is built into the existing MCP gateway. Keep temporary
+// Playwright sessions by default; opt in to Playwright's own persistent
+// profile when the operator has secured that device and its browser data.
+// Do not expose an arbitrary user-data-dir parameter through the console.
+let browserBackends = get('agent/backends.js');
+browserBackends = exact(browserBackends,
+  "params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],",
+  "params: [\n" +
+  "      { key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false },\n" +
+  "      { key: 'persistent', label: 'Keep a dedicated Playwright session on this device (opt-in)', type: 'boolean', default: false },\n" +
+  "    ],\n" +
+  "    args: (p) => [...(p.persistent ? [] : ['--isolated']), ...(p.headless ? ['--headless'] : [])],");
+put('agent/backends.js', browserBackends);
+
 let agent = get('agent/agent.js');
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,
