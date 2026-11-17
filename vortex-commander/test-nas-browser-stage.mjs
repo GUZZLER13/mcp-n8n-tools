@@ -19,17 +19,18 @@ test('staging shell script parses', () => {
 
 test('untrusted NAS Node is hashed, never executed before a root-owned copy is verified', () => {
   const start = source.indexOf('check_host() {');
-  const end = source.indexOf('\\ncheck_receipt() {', start);
+  const end = source.indexOf('check_receipt() {', start);
   const check = source.slice(start, end);
-  assert.match(check, /sha256sum "\\$SOURCE_NODE"/);
-  assert.match(check, /\\[ ! -L "\\$SOURCE_NODE" \\]/);
-  assert.doesNotMatch(check, /"\\$SOURCE_NODE" --version/);
+  assert.ok(end > start);
+  assert.ok(check.includes('sha256sum "$SOURCE_NODE"'));
+  assert.ok(check.includes('[ ! -L "$SOURCE_NODE" ]'));
+  assert.ok(!check.includes('"$SOURCE_NODE" --version'));
   const copy = source.indexOf('install -o root -g root -m 0755 "$SOURCE_NODE" "$PREFIX/bin/node"');
   const postCopyHash = source.indexOf('sha256sum "$PREFIX/bin/node"', copy);
   const version = source.indexOf('"$PREFIX/bin/node" --version', copy);
   assert.ok(copy > 0 && postCopyHash > copy && version > postCopyHash,
     'Node can only execute after the root-owned copy has been fingerprinted');
-  assert.match(source, /Copied Node runtime is not a trusted, root-owned binary/);
+  assert.ok(source.includes('Copied Node runtime is not a trusted, root-owned binary'));
 });
 
 test('check-only path precedes all mutations and reports no gateway changes', () => {
