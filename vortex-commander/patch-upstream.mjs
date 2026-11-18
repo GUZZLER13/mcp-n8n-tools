@@ -304,7 +304,7 @@ nativeGateway = exact(nativeGateway,
 nativeGateway = exact(nativeGateway,
   "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },",
   "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },\n" +
-  "        instructions: 'Pour consulter Racines, utiliser directement racines_list_families, racines_find_people puis racines_get_research_dossier. Ces outils lisent les fiches, relations, notes, références de documents et recherches actuelles sans Chrome ni sélection de machine. Les scans R2 ne sont pas téléchargés et les incertitudes restent à vérifier.',");
+  "        instructions: 'Pour consulter Racines, utiliser directement racines_list_families, racines_find_people puis racines_get_research_dossier. Ces outils lisent les fiches, relations, notes, références de documents et recherches actuelles sans Chrome ni sélection de machine. Pour les rapports GitHub versionnés, utiliser racines_search_research puis racines_read_research ; vérifier le commit et la date de synchronisation. Les scans R2 ne sont pas téléchargés et les incertitudes restent à vérifier.',");
 put('gateway/server.js', nativeGateway);
 fs.copyFileSync(path.join(kitDir, 'racines-native-tools.mjs'), path.join(root, 'gateway', 'racines-native-tools.mjs'));
 
@@ -313,7 +313,7 @@ fs.copyFileSync(path.join(kitDir, 'racines-native-tools.mjs'), path.join(root, '
 for (const file of ['test/backends.test.js', 'test/e2e.test.js']) {
   put(file, exact(get(file),
     "['device_select', 'devices_list', 'echo', 'tool_call', 'tools_list']",
-    "['device_select', 'devices_list', 'echo', 'racines_find_people', 'racines_get_research_dossier', 'racines_list_families', 'tool_call', 'tools_list']"));
+    "['device_select', 'devices_list', 'echo', 'racines_find_people', 'racines_get_research_dossier', 'racines_list_families', 'racines_read_research', 'racines_search_research', 'tool_call', 'tools_list']"));
 }
 
 console.log('VORTEX overlay applied: pinned backend, Windows policy/env, VPS localhost relay, dynamic Node path.');

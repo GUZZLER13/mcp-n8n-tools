@@ -16,7 +16,7 @@ async function until(fn) {
 }
 test('native Racines catalog is unique, read-only and independent of device snapshots', () => {
   const result=withRacinesTools([{name:'read_file'},...RACINES_NATIVE_TOOLS]);
-  assert.deepEqual(result.map(x=>x.name),['read_file','racines_list_families','racines_find_people','racines_get_research_dossier']);
+  assert.deepEqual(result.map(x=>x.name),['read_file',...RACINES_NATIVE_TOOLS.map(t=>t.name)]);
   for(const tool of RACINES_NATIVE_TOOLS) {
     assert.equal(tool.annotations.readOnlyHint,true);
     assert.equal(tool.annotations.destructiveHint,false);
@@ -64,9 +64,9 @@ test('native HTTP tools route to the reader without a selection, survive snapsho
     const result=await call('tools/call',{name:tool.name,arguments:{}});
     assert.notEqual(result.isError,true);assert.equal(JSON.parse(result.content[0].text).deviceId,'racines-reader');
   }
-  assert.equal(requests.length,3);assert.ok(requests.every(r=>!Object.hasOwn(r.arguments,'device_id')));
+  assert.equal(requests.length,5);assert.ok(requests.every(r=>!Object.hasOwn(r.arguments,'device_id')));
   const redirected=await call('tools/call',{name:'racines_list_families',arguments:{device_id:'other-device'}});
-  assert.equal(redirected.structuredContent.error.code,'INVALID_ARGUMENT');assert.equal(requests.length,3);
+  assert.equal(redirected.structuredContent.error.code,'INVALID_ARGUMENT');assert.equal(requests.length,5);
   assert.equal((await names()).filter(n=>n==='racines_find_people').length,1,'Desktop Commander snapshot must not erase native tools');
   reader.terminate();await until(async()=>JSON.parse((await call('tools/call',{name:'devices_list'})).content[0].text).find(x=>x.device_id==='racines-reader')?.status==='offline');
   const offline=await call('tools/call',{name:'racines_list_families',arguments:{}});

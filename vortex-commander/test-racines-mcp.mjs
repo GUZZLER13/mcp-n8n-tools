@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import https from 'node:https';
 import { execFileSync } from 'node:child_process';
 
-test('RACINES MCP exposes exactly three read-only tools and never reveals missing credentials', async t => {
+test('RACINES MCP exposes exactly five read-only tools and never reveals missing credentials', async t => {
   const home = mkdtempSync(join(tmpdir(), 'vortex-racines-mcp-smoke-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const client = new Client(
@@ -31,7 +31,7 @@ test('RACINES MCP exposes exactly three read-only tools and never reveals missin
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map(tool => tool.name).sort(),
-    ['find_people', 'get_research_dossier', 'list_families']
+    ['find_people', 'get_research_dossier', 'list_families', 'read_research', 'search_research']
   );
   for (const tool of tools) {
     assert.equal(tool.inputSchema.type, 'object');
@@ -47,6 +47,8 @@ test('RACINES MCP exposes exactly three read-only tools and never reveals missin
   const bogus = '11111111-1111-4111-8111-111111111111';
   const cases = [
     ['list_families', {}],
+    ['search_research', { query: 'Fictive' }],
+    ['read_research', { path: 'recherches/fictive.md' }],
     ['find_people', { familyId: bogus, query: 'Marty' }],
     ['get_research_dossier', { familyId: bogus, personId: 'person-fictive' }],
     ['get_research_dossier', { familyId: bogus, personId: 'person-fictive', before: bogus }]
@@ -86,14 +88,14 @@ test('RACINES MCP accepts canonical UUIDs and reaches the mTLS API for search, d
   await client.connect(transport);
   const familyId='11111111-1111-4111-8111-111111111111';
   const cursor='22222222-2222-4222-a222-222222222222';
-  const cases=[['list_families',{}],['find_people',{familyId,query:'Doya'}],['get_research_dossier',{familyId,personId:'personne-fictive'}],['get_research_dossier',{familyId,personId:'personne-fictive',before:cursor}]];
+  const cases=[['search_research',{query:'Rapport fictif',offset:20}],['read_research',{path:'recherches/fictive.md',fromLine:2,maxLines:5}],['list_families',{}],['find_people',{familyId,query:'Doya'}],['get_research_dossier',{familyId,personId:'personne-fictive'}],['get_research_dossier',{familyId,personId:'personne-fictive',before:cursor}]];
   for(const [name,args] of cases) {
     const result=await client.callTool({name,arguments:args});
     assert.notEqual(result.isError,true,name+': '+JSON.stringify(result));
     assert.equal(JSON.parse(result.content[0].text).fictive,true);
   }
-  assert.deepEqual(paths,['/v1/families','/v1/families/'+familyId+'/people?q=Doya','/v1/families/'+familyId+'/people/personne-fictive/research-dossier','/v1/families/'+familyId+'/people/personne-fictive/research-dossier?before='+cursor]);
+  assert.deepEqual(paths,['/v1/research/search?q=Rapport%20fictif&offset=20','/v1/research/document?path=recherches%2Ffictive.md&fromLine=2&maxLines=5','/v1/families','/v1/families/'+familyId+'/people?q=Doya','/v1/families/'+familyId+'/people/personne-fictive/research-dossier','/v1/families/'+familyId+'/people/personne-fictive/research-dossier?before='+cursor]);
   const invalid=await client.callTool({name:'find_people',arguments:{familyId:'11111111-1111-4111-8111111111111',query:'Doya'}});
   assert.equal(invalid.isError,true);
-  assert.equal(paths.length,4,'malformed family IDs must never reach the API');
+  assert.equal(paths.length,6,'malformed family IDs must never reach the API');
 });
