@@ -308,4 +308,12 @@ nativeGateway = exact(nativeGateway,
 put('gateway/server.js', nativeGateway);
 fs.copyFileSync(path.join(kitDir, 'racines-native-tools.mjs'), path.join(root, 'gateway', 'racines-native-tools.mjs'));
 
+// The stable catalog gains exactly the three declared business tools. Keep
+// the upstream assertions exact; add-on discovery and routing tests stay intact.
+for (const file of ['test/backends.test.js', 'test/e2e.test.js']) {
+  put(file, exact(get(file),
+    "['device_select', 'devices_list', 'echo', 'tool_call', 'tools_list']",
+    "['device_select', 'devices_list', 'echo', 'racines_find_people', 'racines_get_research_dossier', 'racines_list_families', 'tool_call', 'tools_list']"));
+}
+
 console.log('VORTEX overlay applied: pinned backend, Windows policy/env, VPS localhost relay, dynamic Node path.');
