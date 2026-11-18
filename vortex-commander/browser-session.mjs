@@ -17,6 +17,7 @@ export class BrowserSession {
     this.totalEvents = 0;
     this.queue = [];
     this.active = false;
+    this.externalKind = null;
     this.controller = new AbortController();
     this.lastCaptureAt = -Infinity;
     this.capturePending = null;
@@ -47,6 +48,7 @@ export class BrowserSession {
 
   resume() {
     if (this.state === 'stopped') throw Error('Session stopped');
+    if (this.externalKind === 'human') throw Error('Human action still active');
     this.state = 'running';
     void this.drain();
   }
@@ -67,6 +69,30 @@ export class BrowserSession {
       this.queue.push({ label, args, resolve, reject });
       void this.drain();
     });
+  }
+
+  // Observers and people share the same execution lock as automated actions.
+  // Human actions are possible only after the active automated call has finished.
+  async external(kind, execute) {
+    if (this.state === 'stopped') throw Error('Session stopped');
+    if (this.active) throw Error('Browser busy');
+    if (kind === 'human' && this.state !== 'paused') throw Error('Pause required');
+    this.active = true;
+    this.externalKind = kind;
+    if (kind === 'human') this.record('human_action', 'running');
+    try {
+      const result = await execute();
+      if (this.state === 'stopped') throw Error('Session stopped');
+      if (kind === 'human') this.record('human_action', result?.isError ? 'failed' : 'completed');
+      return result;
+    } catch {
+      if (kind === 'human') this.record('human_action', this.state === 'stopped' ? 'stopped' : 'failed');
+      throw Error('Browser operation unavailable');
+    } finally {
+      this.externalKind = null;
+      this.active = false;
+      void this.drain();
+    }
   }
 
   async drain() {

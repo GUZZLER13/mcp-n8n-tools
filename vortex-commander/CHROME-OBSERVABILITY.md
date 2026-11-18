@@ -1,5 +1,34 @@
 # Observer et contrôler VORTEX Chrome
 
+## Livraison du 18 novembre 2026 — code à activer
+
+Le dépôt privé `GUZZLER13/vortex-dashboard` contient maintenant le panneau de
+visualisation et son contrôleur. Les paragraphes « à réaliser » ci-dessous
+décrivent le contrat initial, pas une preuve d'activation en production.
+
+L'agent expose deux outils supplémentaires sur le seul appareil navigateur.
+`browser_session_view` accepte seulement la liste des onglets et une capture
+JPEG de la page. Il partage le verrou d'exécution, fonctionne pendant une pause
+et n'ajoute pas les captures au journal de mission. `browser_session_human`
+accepte uniquement clic simple par coordonnées, texte et touches limitées. Il
+exige une pause effective et un navigateur inactif. Une reprise pendant une
+action humaine active est refusée. Les routes et politiques existantes sont
+vérifiées avant l'appel au backend.
+
+L'option `--experimental-vision` de Chrome DevTools MCP 1.13.0 est activée
+uniquement pour le mode navigateur dédié afin d'obtenir `click_at`. Aucun port
+de débogage n'est exposé. Le résultat brut de `type_text`, qui répète le texte
+saisi, est supprimé avant transmission. Le journal ne garde que
+`human_action` et son état.
+
+Le test de navigateur réel vérifie clic, saisie, validation d'un formulaire,
+cookie conservé dans la même session, capture pendant la pause et reprise des
+outils automatisés. Le test de panneau utilise une API fictive en trois formats
+d'écran. L'activation exige encore la mise à jour de l'agent NAS et le montage
+d'un jeton dédié non administrateur dans le contrôleur. La prise en main directe
+ne comprend pas glisser-déposer ni sélecteurs de fichiers. Le flux complet
+dashboard déployé → agent NAS doit être contrôlé après ces opérations.
+
 ## Choix de fonctionnement
 
 Le service de visualisation fonctionne sur le NAS avec le compte navigateur dédié. Le dashboard accède à une API authentifiée via le VPS. Les actions Chrome utilisent la file du seul appareil `pc-nas-browser`. Les appels Desktop Commander poursuivent leur chemin habituel.

@@ -69,6 +69,7 @@ browserBackends = exact(browserBackends,
   "      ...(p.headless ? ['--headless'] : []),\n" +
   "      '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',\n" +
   "      '--no-usage-statistics', '--no-performance-crux',\n" +
+  "      ...(process.env.VORTEX_BROWSER_ONLY === 'true' ? ['--experimental-vision'] : []),\n" +
   "    ],");
 browserBackends = exact(browserBackends,
   "  playwright: {\n    title: 'Playwright browser',\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\n    package: '@playwright/mcp', prefix: 'playwright_',\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\n  },\n",
@@ -213,13 +214,17 @@ agent = exact(agent,
   '      lastBrowserNavStart = Date.now();\n' +
   '    }\n' +
   '    return route.slot.conn.callTool(route.real, args, timeout);\n' +
+  '}, async (name, args) => {\n' +
+  '    const route = routes.get("chrome_" + name);\n' +
+  '    if (!route || route.slot.name !== "chrome-devtools" || check(policy, route.real, args)) throw Error("Viewer operation denied");\n' +
+  '    return route.slot.conn.callTool(route.real, args, 12000);\n' +
   '});\n' +
   'const callBrowserTool = (route, args, timeout) => browserSession.run(route, args, timeout);');
 agent = exact(agent,
   "      if (m.method === 'tools/call') {",
   "      if (m.method === 'tools/call') {\n" +
   "        if (VORTEX_BROWSER_ONLY) {\n" +
-  "          const control = browserSession.control(m.params.name, m.params.arguments);\n" +
+  "          const control = await browserSession.control(m.params.name, m.params.arguments);\n" +
   "          if (control) return reply({ result: control });\n" +
   "        }");
 agent = exact(agent,

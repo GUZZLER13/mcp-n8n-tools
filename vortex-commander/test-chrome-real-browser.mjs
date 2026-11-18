@@ -8,6 +8,53 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { createBrowserAgentSession } from '../agent/browser-agent-session.mjs';
+
+test('human click and keyboard use the same paused Chrome page and preserve its cookie',
+  {timeout:120000}, async t => {
+    let submitted = '', receivedCookie = '';
+    const server = createServer((req,res) => {
+      if (req.url === '/submit') {
+        receivedCookie = req.headers.cookie || '';
+        req.on('data',chunk => {submitted += chunk;});
+      }
+      res.writeHead(200,{'content-type':'text/html','set-cookie':'handoff_fixture=same-browser; Path=/; HttpOnly; SameSite=Lax'});
+      res.end('<title>Human handoff fixture</title><form action="/submit" method="post"><input name="name" style="position:absolute;left:40px;top:60px;width:300px;height:40px"><button style="position:absolute;left:40px;top:130px">Send</button></form>');
+    });
+    await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+    t.after(() => {server.closeAllConnections();server.close();});
+    const cli = path.join(process.env.VORTEX_BROWSER_STAGED_PACKAGE,'out','Default','gen','src','bin','chrome-devtools-mcp.js');
+    const transport = new StdioClientTransport({command:process.execPath,args:[cli,'--headless','--isolated',
+      '--experimental-vision','--executablePath='+process.env.VORTEX_TEST_CHROME_BIN,
+      '--no-javascript-evaluation','--no-file-navigations','--redact-network-headers','--no-usage-statistics','--no-performance-crux'],stderr:'pipe'});
+    const client = new Client({name:'vortex-human-ci',version:'1'},{capabilities:{}});
+    t.after(async () => {await client.close();await transport.close();});
+    await client.connect(transport);
+    const available = await client.listTools();
+    assert.ok(available.tools.some(tool => tool.name === 'click_at'));
+    const execute = (name,args) => client.callTool({name,arguments:args});
+    const session = createBrowserAgentSession(({route,args}) => execute(route.real,args),execute);
+    const listing = await execute('list_pages',{});
+    const pageId = Number(listing.content.map(row => row.text || '').join('\n').match(/(?:^|\n)\s*(\d+):/)[1]);
+    const url = 'http://127.0.0.1:'+server.address().port;
+    assert.notEqual((await session.run({real:'navigate_page'},{pageId,url},12000)).isError,true);
+    session.control('browser_session_pause');
+    const click = await session.control('browser_session_human',{action:'click',pageId,x:100,y:80});
+    assert.notEqual(click.isError,true);
+    const typed = await session.control('browser_session_human',{action:'type',pageId,text:'VORTEX_HUMAN_OK'});
+    assert.notEqual(typed.isError,true);
+    assert.doesNotMatch(JSON.stringify(typed),/VORTEX_HUMAN_OK/);
+    assert.notEqual((await session.control('browser_session_human',{action:'key',pageId,key:'Enter'})).isError,true);
+    assert.match(submitted,/name=VORTEX_HUMAN_OK/);
+    assert.match(receivedCookie,/handoff_fixture=same-browser/);
+    const frame = await session.control('browser_session_view',{action:'frame',pageId});
+    assert.ok(frame.content.some(row => row.type === 'image'));
+    const state = JSON.parse(session.control('browser_session_status').content[0].text);
+    assert.equal(state.state,'paused');
+    assert.doesNotMatch(JSON.stringify(state),/VORTEX_HUMAN_OK|same-browser/);
+    session.control('browser_session_resume');
+    assert.notEqual((await session.run({real:'take_snapshot'},{pageId},12000)).isError,true);
+  });
 
 test('dedicated browser profile retains a fixture cookie across real Chrome restarts',
   { timeout: 120000 }, async t => {

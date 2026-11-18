@@ -6,7 +6,7 @@ import { createBrowserAgentSession, browserSessionTools } from './browser-agent-
 test('agent control tools are bounded, pause real dispatch and stop rejects later calls', async () => {
   const calls = [];
   const agent = createBrowserAgentSession(async payload => { calls.push(payload); return { content: [] }; });
-  assert.equal(browserSessionTools.length, 4);
+  assert.equal(browserSessionTools.length, 6);
   assert.equal(agent.control('unrelated_tool'), null);
   assert.throws(() => agent.control('browser_session_pause', { arbitrary: true }));
   agent.control('browser_session_pause');
@@ -44,6 +44,42 @@ test('pause drains no queued actions, resume serializes and journal excludes pri
   await second;
   assert.deepEqual(executed, ['navigate_page', 'take_snapshot']);
   assert.doesNotMatch(JSON.stringify(session.snapshot()), /secret-fixture|password/);
+});
+
+test('human takeover shares the execution lock, requires pause and redacts typed values', async () => {
+  let release;
+  const calls = [];
+  const agent = createBrowserAgentSession(async () => ({content:[]}), async (tool,args) => {
+    calls.push({tool,args});
+    if (tool === 'type_text') await new Promise(resolve => {release=resolve;});
+    return {content:[{type:'text',text:'echo fixture-secret'}]};
+  });
+  await assert.rejects(agent.control('browser_session_human',{action:'click',pageId:1,x:10,y:15}), /Pause required/);
+  agent.control('browser_session_pause');
+  const human = agent.control('browser_session_human',{action:'type',pageId:1,text:'fixture-secret'});
+  assert.throws(() => agent.control('browser_session_resume'), /Human action still active/);
+  await assert.rejects(agent.control('browser_session_view',{action:'pages'}), /busy/);
+  const automated = agent.run({real:'click'},{uid:'queued'},1000);
+  release();
+  assert.doesNotMatch(JSON.stringify(await human), /fixture-secret/);
+  assert.doesNotMatch(JSON.stringify(agent.control('browser_session_status')), /fixture-secret/);
+  assert.equal(calls.length,1);
+  agent.control('browser_session_resume');
+  await automated;
+  assert.throws(() => agent.control('browser_session_human',{action:'key',pageId:1,key:'F12'}), /Invalid key/);
+  assert.throws(() => agent.control('browser_session_view',{action:'frame',pageId:1,filePath:'private'}), /Invalid viewer/);
+});
+
+test('viewer observations do not evict mission events and remain available while paused', async () => {
+  const agent = createBrowserAgentSession(async () => ({content:[]}), async () => ({content:[]}));
+  await agent.run({real:'navigate_page'},{},1000);
+  agent.control('browser_session_pause');
+  for (let i=0;i<120;i++) await agent.control('browser_session_view',{action:'frame',pageId:1});
+  const snapshot = JSON.parse(agent.control('browser_session_status').content[0].text);
+  assert.equal(snapshot.events.length,2);
+  assert.equal(snapshot.omittedEvents,0);
+  agent.control('browser_session_stop');
+  await assert.rejects(agent.control('browser_session_view',{action:'pages'}),/stopped/);
 });
 
 test('stop cancels queued work, signals active work and never announces completion afterwards', async () => {
