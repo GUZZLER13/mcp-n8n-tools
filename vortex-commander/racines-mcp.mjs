@@ -12,7 +12,7 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 
-const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{12}$/i;
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const configFile = path.join(os.homedir(), '.config', 'vortex-commander', 'racines-mtls.json');
 const validPerson = s => typeof s === 'string' && s.length >= 1 && s.length <= 100 && !s.includes('/');
 const privateFile = name => {
