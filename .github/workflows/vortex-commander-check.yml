@@ -255,6 +255,8 @@ jobs:
           Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
           Push-Location upstream
           try {
+            node --test test/vortex-native-racines.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows native Racines discovery test failed' }
             node --test test/vortex-e2e.test.js
             if ($LASTEXITCODE -ne 0) { throw 'Windows full gateway-to-agent test failed' }
           } finally { Pop-Location }
