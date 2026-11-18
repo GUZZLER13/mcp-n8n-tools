@@ -10,7 +10,7 @@ const root = process.argv[2] && path.resolve(process.argv[2]);
 if (!root || !fs.existsSync(path.join(root, 'agent', 'agent.js'))) {
   throw new Error('Usage: node patch-upstream.mjs /path/to/pinned-SelfHostDesktopMCP');
 }
-const get = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+const get = rel => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 const put = (rel, value) => fs.writeFileSync(path.join(root, rel), value, 'utf8');
 function exact(src, needle, replacement, count = 1) {
   const n = src.split(needle).length - 1;
@@ -28,6 +28,11 @@ const modifiedLine = sourceLine.replace('cmd.replace(', 'expandedCommand.replace
 const normalized = '    const normalizedText = process.platform === "win32" ? text.replace(/\\//g, path.sep) : text;';
 policy = exact(policy, sourceLine, [expansion, modifiedLine, normalized].join('\n'));
 policy = exact(policy, 'CASE(text).includes', 'CASE(normalizedText).includes', 2);
+// Browser profiles contain session cookies; deny direct file-tool reads of
+// the dedicated directory. This is defense in depth, not a sandbox for shell.
+policy = exact(policy,
+  "'~/remote-mcp/secrets', '~/remote-mcp/remote-mcp.db'",
+  "'~/remote-mcp/secrets', '~/remote-mcp/remote-mcp.db', '~/.local/share/vortex-commander/chrome-profile'");
 put('agent/policy.js', policy);
 
 // ChatGPT's OAuth integration relies on advertised offline refresh access.
@@ -42,7 +47,145 @@ oauthSource = exact(oauthSource,
   "refresh_token: refresh, scope: 'mcp offline_access'");
 put('gateway/oauth.js', oauthSource);
 
+// Chrome DevTools is the single browser backend for guided archive research.
+// Keep ephemeral browser profiles by default. An explicit opt-in uses an
+// absolute per-user, per-device profile directory for repeatable persistence.
+// Never share the personal Chrome profile or expose arbitrary browser flags.
+let browserBackends = get('agent/backends.js');
+browserBackends = exact(browserBackends,
+  '// Catalog of MCP servers the gateway console may ask an agent to run.',
+  "import os from 'node:os';\nimport path from 'node:path';\n\n" +
+  '// Catalog of MCP servers the gateway console may ask an agent to run.');
+browserBackends = exact(browserBackends,
+  "params: [\n      { key: 'autoConnect', label: 'Use my running Chrome (--autoConnect): your real profile and logged-in sessions', type: 'boolean', default: false },\n      { key: 'headless', label: 'Headless (no visible window; ignored with autoConnect)', type: 'boolean', default: false },\n    ],\n    // --autoConnect attaches to an existing browser, so it replaces --isolated/--headless (which only apply to a browser it launches itself)\n    args: (p) => (p.autoConnect ? ['--autoConnect'] : ['--isolated', ...(p.headless ? ['--headless'] : [])]),",
+  "params: [\n" +
+  "      { key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false },\n" +
+  "      { key: 'persistent', label: 'Keep dedicated Chrome DevTools session on this device (opt-in)', type: 'boolean', default: false },\n" +
+  "      { key: 'debianChromium', label: 'Use system Debian Chromium (Linux only)', type: 'boolean', default: false },\n" +
+  "    ],\n" +
+  "    args: (p) => [\n" +
+  "      ...(p.debianChromium === true ? ['--executablePath=/usr/bin/chromium'] : []),\n" +
+  "      ...(p.persistent ? [\`--user-data-dir=\${path.join(os.homedir(), '.local', 'share', 'vortex-commander', 'chrome-profile')}\`] : ['--isolated']),\n" +
+  "      ...(p.headless ? ['--headless'] : []),\n" +
+  "      '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers',\n" +
+  "      '--no-usage-statistics', '--no-performance-crux',\n" +
+  "      ...(process.env.VORTEX_BROWSER_ONLY === 'true' ? ['--experimental-vision'] : []),\n" +
+  "    ],");
+browserBackends = exact(browserBackends,
+  "  playwright: {\n    title: 'Playwright browser',\n    description: 'Browser automation by accessibility snapshot (navigate, click, type, screenshot). In-memory profile.',\n    package: '@playwright/mcp', prefix: 'playwright_',\n    params: [{ key: 'headless', label: 'Headless (no visible window)', type: 'boolean', default: false }],\n    args: (p) => ['--isolated', ...(p.headless ? ['--headless'] : [])],\n    default_disabled: ['browser_evaluate', 'browser_run_code', 'browser_file_upload'],\n  },\n",
+  "");
+browserBackends = exact(browserBackends,
+  "return { name, command: ['npx', '-y', \`${t.package}@latest\`, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };",
+  "if (template === 'chrome-devtools' && p.debianChromium === true && (process.platform !== 'linux' || !fs.existsSync('/usr/bin/chromium'))) throw new Error('Debian Chromium requires installed /usr/bin/chromium on Linux');\n  " +
+  "if (template === 'chrome-devtools' && process.env.VORTEX_BROWSER_ONLY === 'true') {\n" +
+  "  if (p.debianChromium !== true || p.headless !== true) throw new Error('NAS browser agent requires headless isolated Debian Chromium');\n" +
+  "  if (p.persistent === true && process.env.VORTEX_BROWSER_PERSISTENT !== 'true') throw new Error('Persistent NAS profile requires local opt-in');\n" +
+  "  if (Object.keys(params).some(k => !['debianChromium', 'headless', 'persistent'].includes(k))) throw new Error('Unsupported isolated NAS browser options');\n" +
+  "  const trustedRoot = '/opt/vortex-browser-mcp';\n" +
+  "  const backendRoot = path.join(trustedRoot, 'node_modules', 'chrome-devtools-mcp');\n" +
+  "  const manifest = path.join(backendRoot, 'package.json');\n" +
+  "  const cli = path.join(backendRoot, 'out', 'Default', 'gen', 'src', 'bin', 'chrome-devtools-mcp.js');\n" +
+  "  if (!fs.existsSync(manifest) || !fs.existsSync(cli) || JSON.parse(fs.readFileSync(manifest, 'utf8')).version !== '1.13.0') throw new Error('Pinned Chrome DevTools 1.13.0 must be preinstalled for browser-only agent');\n" +
+  "  // Check every path component, including node_modules and binary parents, before execution.\n" +
+  "  const assertRootOwned = (candidate) => {\n" +
+  "    let current = path.resolve(candidate);\n" +
+  "    while (true) {\n" +
+  "      const stat = fs.lstatSync(current);\n" +
+  "      if (stat.isSymbolicLink() || stat.uid !== 0 || (stat.mode & 0o022)) throw new Error('Browser runtime must be root-owned and not group/world-writable');\n" +
+  "      const parent = path.dirname(current);\n" +
+  "      if (parent === current) break;\n" +
+  "      current = parent;\n" +
+  "    }\n" +
+  "  };\n" +
+  "  for (const localFile of [trustedRoot, backendRoot, manifest, cli, process.execPath]) assertRootOwned(localFile);\n" +
+  "  if (p.persistent === true) privateBrowserProfile();\n" +
+  "  return { name, command: [process.execPath, cli, ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };\n" +
+  "}\n" +
+
+  "return { name, command: ['npx', '-y', 'chrome-devtools-mcp@1.13.0', ...t.args(p)], prefix: t.prefix, defaultDisabled: t.default_disabled };");
+// Fixed RACINES reader backend: no arbitrary commands, no user-managed token.
+browserBackends = exact(
+  browserBackends,
+  "import os from 'node:os';",
+  "import os from 'node:os';\nimport fs from 'node:fs';\nimport { fileURLToPath } from 'node:url';\nimport { privateBrowserProfile } from './private-browser-profile.mjs';"
+);
+browserBackends = exact(
+  browserBackends,
+  'export const CATALOG = {',
+  "export const CATALOG = {\n" +
+    "  racines: { title: 'RACINES (lecture seule)', description: 'Family research via private mTLS, no browser credentials', prefix: 'racines_', params: [], default_disabled: [] },"
+);
+browserBackends = exact(
+  browserBackends,
+  "  if (template === 'custom') {",
+  "  if (template === 'racines') {\n" +
+    "    if (name !== 'racines' || Object.keys(params).length) throw new Error('invalid RACINES options');\n" +
+    "    if (process.platform !== 'linux') throw new Error('RACINES backend requires a Linux service host');\n" +
+    "    if (process.env.VORTEX_RACINES_READER_ONLY !== 'true' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines') throw new Error('RACINES backend requires dedicated isolated reader');\n" +
+    "    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'racines-mcp.mjs');\n" +
+    "    if (!fs.existsSync(script)) throw new Error('RACINES backend not installed');\n" +
+    "    return { name: 'racines', command: [process.execPath, script], prefix: 'racines_', defaultDisabled: [] };\n" +
+    "  }\n" +
+    "  if (template === 'custom') {"
+);
+put('agent/backends.js', browserBackends);
+
+// Keep upstream end-to-end regression coverage while replacing only its old
+// catalog expectations; this overlay intentionally removes automatic access
+// to personal Chrome and Playwright. On upstream drift fail closed.
+let browserTests = get('test/backends.test.js');
+browserTests = exact(browserTests, "'chrome-devtools-mcp@latest'", "'chrome-devtools-mcp@1.13.0'", 2);
+browserTests = exact(browserTests,
+  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless']);",
+  "assert.deepEqual(r.command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--isolated', '--headless', '--no-javascript-evaluation', '--no-file-navigations', '--redact-network-headers', '--no-usage-statistics', '--no-performance-crux']);");
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command, ['npx', '-y', 'chrome-devtools-mcp@1.13.0', '--autoConnect']);",
+  "assert.ok(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: { autoConnect: true, headless: true } }, {}).command.includes('--isolated'));" );
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: {} }, {}).command.slice(3), ['--isolated'], 'defaults stay isolated');",
+  "assert.ok(resolveBackend({ template: 'chrome-devtools', name: 'chrome-devtools', params: {} }, {}).command.includes('--isolated'), 'defaults stay isolated');");
+browserTests = exact(browserTests,
+  "assert.deepEqual(resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}).command.slice(0, 3), ['npx', '-y', '@playwright/mcp@latest']);",
+  "assert.throws(() => resolveBackend({ template: 'playwright', name: 'playwright', params: {} }, {}), /unknown template/);");
+browserTests = exact(browserTests, "assert.ok(Object.keys(CATALOG).length >= 2);",
+  "assert.deepEqual(Object.keys(CATALOG), ['racines', 'chrome-devtools']);");
+put('test/backends.test.js', browserTests);
+
 let agent = get('agent/agent.js');
+agent = exact(agent, "import fs from 'node:fs';",
+  "import fs from 'node:fs';\nimport { createBrowserAgentSession, browserSessionTools } from './browser-agent-session.mjs';");
+for (const name of ['browser-session.mjs', 'browser-agent-session.mjs', 'private-browser-profile.mjs']) {
+  put('agent/' + name, fs.readFileSync(path.join(kitDir, name), 'utf8'));
+}
+// Reader-only mode is for a different, non-root OS identity and a separate
+// paired VORTEX device. Never run Desktop Commander or Chrome in this mode.
+agent = exact(agent,
+  "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));",
+  "const RACINES_READER_ONLY = process.env.VORTEX_RACINES_READER_ONLY === 'true';\n" +
+  "const VORTEX_BROWSER_ONLY = process.env.VORTEX_BROWSER_ONLY === 'true';\n" +
+  "if (RACINES_READER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-racines')) {\n" +
+  "  throw Error('RACINES reader requires a dedicated unprivileged vortex-racines account');\n" +
+  "}\n" +
+  "if (VORTEX_BROWSER_ONLY && (process.platform !== 'linux' || process.getuid?.() === 0 || os.userInfo().username !== 'vortex-browser')) {\n" +
+  "  throw Error('VORTEX browser mode requires dedicated unprivileged vortex-browser account');\n" +
+  "}\n" +
+  "const policy = loadPolicy(flag('policy', path.join(path.dirname(configPath), 'policy.json')));"
+);
+agent = exact(agent,
+  'async function reconcile(desired) {',
+  'async function reconcile(desired) {\n  if (RACINES_READER_ONLY) desired = desired.filter(d => d?.name === "racines" && d?.template === "racines");\n  if (VORTEX_BROWSER_ONLY) desired = desired.filter(d => d?.name === "chrome-devtools" && d?.template === "chrome-devtools");'
+);
+agent = exact(agent, 'await startBuiltin();', 'if (!RACINES_READER_ONLY && !VORTEX_BROWSER_ONLY) await startBuiltin();');
+// In browser-only mode, the gateway console must never be able to re-enable
+// dangerous tools via enabled_tools. Default-disabled is not a hard deny.
+agent = exact(agent,
+  'const on = new Set(enabledNames(slot));',
+  'const on = new Set(enabledNames(slot));\n' +
+  '    if (VORTEX_BROWSER_ONLY && slot.name === "chrome-devtools") {\n' +
+  '      on.delete("upload_file");\n' +
+  '      on.delete("evaluate_script");\n' +
+  '    }');
+
 // Never implicitly launch @latest; explicit pinned package setup is required.
 agent = exact(agent,
   "desktop_commander: { command: ['npx', '-y', '@wonderwhy-er/desktop-commander@latest'] }",
@@ -54,6 +197,42 @@ const envLine = agent.split('\n').find(x => x.startsWith('const PASS_ENV = '));
 if (!envLine) throw new Error('Cannot find child process environment');
 agent = exact(agent, envLine,
   "const PASS_ENV = ['DISPLAY','XAUTHORITY','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_SESSION_TYPE','XDG_CURRENT_DESKTOP','LANG','LC_ALL','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP','SystemRoot','WINDIR','HOMEDRIVE','HOMEPATH','ComSpec','PATHEXT'];");
+// Keep Chrome calls sequential within this agent to prevent overlapping UI
+// actions. Pace full navigations modestly to avoid accidental bursts;
+// never retry challenges, forbidden pages or HTTP rate-limit responses.
+agent = exact(agent,
+  'const exposedTools = () => [...routes.values()].map((r) => r.tool);',
+  'const exposedTools = () => [...routes.values()].map((r) => r.tool).concat(VORTEX_BROWSER_ONLY ? browserSessionTools : []);\n' +
+  'const BROWSER_NAV_GAP_MS = 2500;\n' +
+  'let lastBrowserNavStart = 0;\n' +
+  'const browserSession = createBrowserAgentSession(async ({ route, args, timeout }, signal) => {\n' +
+  '    if (signal.aborted) throw Error("Session stopped");\n' +
+  '    if (["navigate_page", "new_page", "navigate_history"].includes(route.real)) {\n' +
+  '      const delay = Math.max(0, lastBrowserNavStart + BROWSER_NAV_GAP_MS - Date.now());\n' +
+  '      if (delay) await new Promise(resolve => setTimeout(resolve, delay));\n' +
+  '      if (signal.aborted) throw Error("Session stopped");\n' +
+  '      lastBrowserNavStart = Date.now();\n' +
+  '    }\n' +
+  '    return route.slot.conn.callTool(route.real, args, timeout);\n' +
+  '}, async (name, args) => {\n' +
+  '    const route = routes.get("chrome_" + name);\n' +
+  '    if (!route || route.slot.name !== "chrome-devtools" || check(policy, route.real, args)) throw Error("Viewer operation denied");\n' +
+  '    return route.slot.conn.callTool(route.real, args, 12000);\n' +
+  '});\n' +
+  'const callBrowserTool = (route, args, timeout) => browserSession.run(route, args, timeout);');
+agent = exact(agent,
+  "      if (m.method === 'tools/call') {",
+  "      if (m.method === 'tools/call') {\n" +
+  "        if (VORTEX_BROWSER_ONLY) {\n" +
+  "          const control = await browserSession.control(m.params.name, m.params.arguments);\n" +
+  "          if (control) return reply({ result: control });\n" +
+  "        }");
+agent = exact(agent,
+  'const result = await route.slot.conn.callTool(route.real, args, Number.isFinite(t) ? t + 4000 : 60_000);',
+  'const timeout = Number.isFinite(t) ? t + 4000 : 60_000;\n' +
+  '        const result = await (route.slot.name === "chrome-devtools"\n' +
+  '          ? callBrowserTool(route, args, timeout)\n' +
+  '          : route.slot.conn.callTool(route.real, args, timeout));');
 put('agent/agent.js', agent);
 
 // The gateway and VPS agent initially talk only over localhost. We do not
@@ -86,6 +265,10 @@ for (const name of ['agent', 'gateway']) {
 }
 fs.copyFileSync(path.join(kitDir, 'configure-backend.mjs'),
   path.join(root, 'agent', 'configure-backend.mjs'));
+fs.copyFileSync(path.join(kitDir, 'racines-mcp.mjs'),
+  path.join(root, 'agent', 'racines-mcp.mjs'));
+fs.copyFileSync(path.join(kitDir, 'state-backup.mjs'),
+  path.join(root, 'gateway', 'state-backup.mjs'));
 
 
 /* Performance overlay: read-only batched checks; opt-in metadata-only traces.
@@ -98,5 +281,39 @@ let agentPerf = get('agent/agent.js');
 agentPerf = exact(agentPerf, "    const reply = (body) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'response', request_id: m.request_id, ...body }));", "    const startedMs = performance.now();\n    const reply = (body) => ws.readyState === 1 && ws.send(JSON.stringify({\n      type: 'response', request_id: m.request_id, ...body,\n      _vortex_agent_ms: Math.round(performance.now() - startedMs)\n    }));");
 put('gateway/server.js', gatewayPerf);
 put('agent/agent.js', agentPerf);
+
+// Native business tools belong to a stable registry, not the volatile Desktop
+// Commander snapshot. A reconnect must not erase them or change their target.
+let nativeGateway = get('gateway/server.js');
+nativeGateway = exact(nativeGateway, "import crypto from 'node:crypto';",
+  "import crypto from 'node:crypto';\nimport { withRacinesTools, RACINES_TOOL_NAMES, RACINES_DEVICE } from './racines-native-tools.mjs';");
+nativeGateway = exact(nativeGateway,
+  "return { tools: [...GATEWAY_TOOLS, ...builtinSnapshot().map(withDeviceId)] };",
+  "return { tools: withRacinesTools([...GATEWAY_TOOLS, ...builtinSnapshot().map(withDeviceId)]) };");
+nativeGateway = exact(nativeGateway,
+  "return { tools: [...GATEWAY_TOOLS, ...(dev?.tools ?? []).map(withDeviceId)] };",
+  "return { tools: withRacinesTools([...GATEWAY_TOOLS, ...(dev?.tools ?? []).map(withDeviceId)]) };");
+nativeGateway = exact(nativeGateway,
+  "    if (tool === 'devices_list') {",
+  "    if (RACINES_TOOL_NAMES.has(tool)) {\n" +
+  "      if (args.device_id !== undefined && args.device_id !== RACINES_DEVICE)\n" +
+  "        throw new RelayError('INVALID_ARGUMENT', 'RACINES tools target the isolated reader only');\n" +
+  "      args = { ...args, device_id: RACINES_DEVICE };\n" +
+  "    }\n" +
+  "    if (tool === 'devices_list') {");
+nativeGateway = exact(nativeGateway,
+  "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },",
+  "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },\n" +
+  "        instructions: 'Pour consulter Racines, utiliser directement racines_list_families, racines_find_people puis racines_get_research_dossier. Ces outils lisent les fiches, relations, notes, références de documents et recherches actuelles sans Chrome ni sélection de machine. Pour les rapports GitHub versionnés, utiliser racines_search_research puis racines_read_research ; vérifier le commit et la date de synchronisation. Les scans R2 ne sont pas téléchargés et les incertitudes restent à vérifier.',");
+put('gateway/server.js', nativeGateway);
+fs.copyFileSync(path.join(kitDir, 'racines-native-tools.mjs'), path.join(root, 'gateway', 'racines-native-tools.mjs'));
+
+// The stable catalog gains exactly the three declared business tools. Keep
+// the upstream assertions exact; add-on discovery and routing tests stay intact.
+for (const file of ['test/backends.test.js', 'test/e2e.test.js']) {
+  put(file, exact(get(file),
+    "['device_select', 'devices_list', 'echo', 'tool_call', 'tools_list']",
+    "['device_select', 'devices_list', 'echo', 'racines_find_people', 'racines_get_research_dossier', 'racines_list_families', 'racines_read_research', 'racines_search_research', 'tool_call', 'tools_list']"));
+}
 
 console.log('VORTEX overlay applied: pinned backend, Windows policy/env, VPS localhost relay, dynamic Node path.');

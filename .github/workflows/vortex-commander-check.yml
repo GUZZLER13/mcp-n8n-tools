@@ -6,6 +6,11 @@ on:
     paths:
       - 'vortex-commander/**'
       - '.github/workflows/vortex-commander-check.yml'
+  pull_request:
+    branches: [vortex-commander-hardening]
+    paths:
+      - 'vortex-commander/**'
+      - '.github/workflows/vortex-commander-check.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +36,10 @@ jobs:
           for file in vortex-commander/*.sh; do bash -n "$file"; done
           for file in vortex-commander/*.mjs; do node --check "$file"; done
           node --test vortex-commander/test-preserve-existing-dc.mjs
+          node --test vortex-commander/test-nas-browser-stage.mjs
+          node --test vortex-commander/test-browser-agent-archive.mjs
+          node --test vortex-commander/test-browser-session.mjs
+          node --test vortex-commander/test-private-browser-profile.mjs
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck -S error vortex-commander/*.sh
           fi
@@ -54,6 +63,17 @@ jobs:
           node-version: '22'
       - name: Apply safety and compatibility fixes
         run: node vortex-commander/patch-upstream.mjs upstream
+      - name: Check Chrome-only browser profiles and policy contracts
+        run: node --test vortex-commander/test-chrome-backend.mjs
+      - name: Verify pinned Chrome MCP npm distribution before NAS staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/vortex-browser-mcp"
+          npm install --prefix "$runtime" --ignore-scripts --no-audit --no-fund \
+            --no-bin-links --save-exact chrome-devtools-mcp@1.13.0
+          VORTEX_BROWSER_STAGED_PACKAGE="$runtime/node_modules/chrome-devtools-mcp" \
+            node --test vortex-commander/test-chrome-distribution.mjs
       - name: Run locked dependencies and upstream suite
         working-directory: upstream
         shell: bash
@@ -63,11 +83,53 @@ jobs:
           cp ../vortex-commander/test-vps-user-policy.mjs test/vortex-vps-user-policy.test.js
           cp ../vortex-commander/policy-vps-admin-user.json test/vortex-policy-vps-admin-user.json
           node --test test/vortex-vps-user-policy.test.js
+          cp ../vortex-commander/test-racines-mcp.mjs test/vortex-racines-mcp.test.js
+          node --test test/vortex-racines-mcp.test.js
+          cp ../vortex-commander/test-native-racines.mjs test/vortex-native-racines.test.js
+          node --test test/vortex-native-racines.test.js
+          cp ../vortex-commander/test-state-backup.mjs test/vortex-state-backup.test.js
+          node --test test/vortex-state-backup.test.js
           bash -n deploy/install-linux.sh
           grep -q -- '--port 8766' deploy/remote-mcp-gateway.service.in
           grep -q -- '127.0.0.1:8766/device' deploy/install-linux.sh
           ! grep -q '@latest' agent/agent.js
 
+      - name: Real headless Chrome MCP navigation on isolated CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$chrome" && test -x "$chrome"
+          cp vortex-commander/test-chrome-real-browser.mjs upstream/test/vortex-chrome-real-browser.test.js
+          cd upstream
+          VORTEX_BROWSER_STAGED_PACKAGE="$RUNNER_TEMP/vortex-browser-mcp/node_modules/chrome-devtools-mcp" \
+          VORTEX_TEST_CHROME_BIN="$chrome" \
+            node --test test/vortex-chrome-real-browser.test.js
+      - name: Build browser-only agent bundle for operator review (no deployment)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash vortex-commander/build-nas-browser-agent-bundle.sh upstream \
+            "$RUNNER_TEMP/vortex-browser-agent.tar.gz"
+          tar -tzf "$RUNNER_TEMP/vortex-browser-agent.tar.gz" > "$RUNNER_TEMP/browser-agent-entries.txt"
+          grep -Fxq 'agent/agent.js' "$RUNNER_TEMP/browser-agent-entries.txt"
+          grep -Fxq 'agent/backends.js' "$RUNNER_TEMP/browser-agent-entries.txt"
+          grep -Fq 'node_modules/ws/' "$RUNNER_TEMP/browser-agent-entries.txt"
+          sha256sum -c "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256"
+          node vortex-commander/audit-browser-agent-archive.mjs \
+            "$RUNNER_TEMP/vortex-browser-agent.tar.gz" \
+            "$(cut -d ' ' -f1 "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256")"
+          echo "Browser candidate SHA256 (compare against artifact):"
+          cut -d ' ' -f1 "$RUNNER_TEMP/vortex-browser-agent.tar.gz.sha256"
+      - name: Archive isolated browser agent for later approved staging
+        uses: actions/upload-artifact@v4
+        with:
+          name: vortex-browser-agent-candidate
+          path: |
+            ${{ runner.temp }}/vortex-browser-agent.tar.gz
+            ${{ runner.temp }}/vortex-browser-agent.tar.gz.sha256
+          retention-days: 7
+          if-no-files-found: error
       - name: Install pinned local Desktop Commander for end-to-end gateway test
         shell: bash
         run: |
@@ -132,6 +194,8 @@ jobs:
         run: |
           node vortex-commander/patch-upstream.mjs upstream
           if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          node --test vortex-commander/test-chrome-backend.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Chrome backend contract failed' }
           node --test vortex-commander/test-preserve-existing-dc.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Existing Desktop Commander config preservation regression' }
           $tokens = $null
@@ -187,9 +251,12 @@ jobs:
       - name: Test real Windows HTTP gateway and agent file operations
         shell: pwsh
         run: |
+          Copy-Item 'vortex-commander/test-native-racines.mjs' 'upstream/test/vortex-native-racines.test.js'
           Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
           Push-Location upstream
           try {
+            node --test test/vortex-native-racines.test.js
+            if ($LASTEXITCODE -ne 0) { throw 'Windows native Racines discovery test failed' }
             node --test test/vortex-e2e.test.js
             if ($LASTEXITCODE -ne 0) { throw 'Windows full gateway-to-agent test failed' }
           } finally { Pop-Location }
