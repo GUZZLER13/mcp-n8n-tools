@@ -282,4 +282,30 @@ agentPerf = exact(agentPerf, "    const reply = (body) => ws.readyState === 1 &&
 put('gateway/server.js', gatewayPerf);
 put('agent/agent.js', agentPerf);
 
+// Native business tools belong to a stable registry, not the volatile Desktop
+// Commander snapshot. A reconnect must not erase them or change their target.
+let nativeGateway = get('gateway/server.js');
+nativeGateway = exact(nativeGateway, "import crypto from 'node:crypto';",
+  "import crypto from 'node:crypto';\nimport { withRacinesTools, RACINES_TOOL_NAMES, RACINES_DEVICE } from './racines-native-tools.mjs';");
+nativeGateway = exact(nativeGateway,
+  "return { tools: [...GATEWAY_TOOLS, ...builtinSnapshot().map(withDeviceId)] };",
+  "return { tools: withRacinesTools([...GATEWAY_TOOLS, ...builtinSnapshot().map(withDeviceId)]) };");
+nativeGateway = exact(nativeGateway,
+  "return { tools: [...GATEWAY_TOOLS, ...(dev?.tools ?? []).map(withDeviceId)] };",
+  "return { tools: withRacinesTools([...GATEWAY_TOOLS, ...(dev?.tools ?? []).map(withDeviceId)]) };");
+nativeGateway = exact(nativeGateway,
+  "    if (tool === 'devices_list') {",
+  "    if (RACINES_TOOL_NAMES.has(tool)) {\n" +
+  "      if (args.device_id !== undefined && args.device_id !== RACINES_DEVICE)\n" +
+  "        throw new RelayError('INVALID_ARGUMENT', 'RACINES tools target the isolated reader only');\n" +
+  "      args = { ...args, device_id: RACINES_DEVICE };\n" +
+  "    }\n" +
+  "    if (tool === 'devices_list') {");
+nativeGateway = exact(nativeGateway,
+  "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },",
+  "        serverInfo: { name: 'remote-mcp-gateway', version: VERSION },\n" +
+  "        instructions: 'Pour consulter Racines, utiliser directement racines_list_families, racines_find_people puis racines_get_research_dossier. Ces outils lisent les fiches, relations, notes, références de documents et recherches actuelles sans Chrome ni sélection de machine. Les scans R2 ne sont pas téléchargés et les incertitudes restent à vérifier.',");
+put('gateway/server.js', nativeGateway);
+fs.copyFileSync(path.join(kitDir, 'racines-native-tools.mjs'), path.join(root, 'gateway', 'racines-native-tools.mjs'));
+
 console.log('VORTEX overlay applied: pinned backend, Windows policy/env, VPS localhost relay, dynamic Node path.');

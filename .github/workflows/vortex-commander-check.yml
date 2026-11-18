@@ -85,6 +85,8 @@ jobs:
           node --test test/vortex-vps-user-policy.test.js
           cp ../vortex-commander/test-racines-mcp.mjs test/vortex-racines-mcp.test.js
           node --test test/vortex-racines-mcp.test.js
+          cp ../vortex-commander/test-native-racines.mjs test/vortex-native-racines.test.js
+          node --test test/vortex-native-racines.test.js
           cp ../vortex-commander/test-state-backup.mjs test/vortex-state-backup.test.js
           node --test test/vortex-state-backup.test.js
           bash -n deploy/install-linux.sh
@@ -249,6 +251,7 @@ jobs:
       - name: Test real Windows HTTP gateway and agent file operations
         shell: pwsh
         run: |
+          Copy-Item 'vortex-commander/test-native-racines.mjs' 'upstream/test/vortex-native-racines.test.js'
           Copy-Item 'vortex-commander/test-gateway-e2e.mjs' 'upstream/test/vortex-e2e.test.js'
           Push-Location upstream
           try {

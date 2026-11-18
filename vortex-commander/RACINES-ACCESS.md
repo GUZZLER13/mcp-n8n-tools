@@ -77,3 +77,12 @@ En cas de panne réseau, de redémarrage NAS ou de perte de session, reprendre u
 **Phase E — Convergence** : nouveaux filtres d'arbre, inventaire exhaustif et recette comparée des anciens et nouveaux écrans. Désactiver l'ancien site **uniquement après** contrôle indépendant et possibilité de retour arrière.
 
 Ce plan privilégie la simplicité : **pas de base parallèle, pas de droit universel, pas de navigateur chargé de gérer les mots de passe lui-même**.
+
+
+## Exposition native à ChatGPT — 18 novembre
+
+Le registre `racines-native-tools.mjs` annonce les trois outils métier directement dans `tools/list`, en modes stable et all, même lorsque le lecteur est hors ligne. Leurs descriptions exposent l’usage, les paramètres, la lecture seule et la limite documentaire (métadonnées, sans téléchargement des scans R2). Les instructions MCP d’initialisation expliquent le parcours de recherche.
+
+Les appels sont routés vers l’appareil isolé `racines-reader`, sans sélection préalable et indépendamment du dernier terminal choisi. Un ciblage explicite différent est refusé. Le registre est distinct du snapshot Desktop Commander : la reconnexion d’un autre appareil ne peut pas effacer ces outils. Un lecteur arrêté renvoie une erreur explicite, sans bascule vers une autre machine.
+
+Recette : catalogue sans lecteur, invocation native HTTP après sélection d’un autre appareil, paramètres transmis sans identifiant de machine au backend, refus de redirection, nouveau snapshot et arrêt du lecteur. Ces tests utilisent une base et des appareils fictifs isolés ; l’activation réelle reste un contrôle séparé.
